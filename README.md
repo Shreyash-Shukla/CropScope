@@ -24,7 +24,7 @@ The supported rectangle size is 0.01–9 km², with each side at most 5 km. A re
 
 ## Current result
 
-The app shows seven local dates, daily precipitation sum (mm), maximum 2 m air temperature (°C), and FAO reference evapotranspiration ET₀ (mm). The table and charts identify the source, forecast time zone, and UTC fetch time. The forecast comes from the [Open-Meteo Forecast API](https://open-meteo.com/en/docs), which returns a gridded reading for the selected centre. It is predicted weather, not a field measurement. ET₀ describes a reference grass surface and is **not** an irrigation prescription. If the weather service fails, the app shows an error and allows a retry for the same area.
+The app shows seven local dates, daily forecast rain (mm), maximum 2 m air temperature (°C), and FAO reference evapotranspiration ET₀ (mm). The table and charts identify the source, forecast time zone, and UTC fetch time. The forecast comes from the [Open-Meteo Forecast API](https://open-meteo.com/en/docs), which returns a gridded reading for the selected centre. It is predicted weather, not a field measurement. ET₀ describes a reference grass surface and is **not** an irrigation prescription. If the weather service fails, the app shows an error and allows a retry for the same area.
 
 The saved Karnal example is **29.748–29.752° N, 77.048–77.052° E**. On 25 October 2026, the public [Element 84 Earth Search STAC API](https://github.com/Element84/earth-search) returned Sentinel-2 Level-2A item `S2B_T43RFN_20261025T053358_L2A` intersecting it. This confirms scene availability only; field content and pixel quality need checking in Phase 2.
 

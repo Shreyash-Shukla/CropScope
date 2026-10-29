@@ -12,7 +12,7 @@ from models import AnalysisArea, ForecastDay, WeatherResult
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 DAILY_FIELDS = (
-    "precipitation_sum",
+    "rain_sum",
     "temperature_2m_max",
     "et0_fao_evapotranspiration",
 )
@@ -43,7 +43,7 @@ def parse_weather(
         units = payload["daily_units"]
         timezone_name = payload["timezone"]
         dates = daily["time"]
-        rain = daily["precipitation_sum"]
+        rain = daily["rain_sum"]
         temperatures = daily["temperature_2m_max"]
         et0 = daily["et0_fao_evapotranspiration"]
     except (KeyError, TypeError) as exc:
@@ -58,7 +58,7 @@ def parse_weather(
         raise WeatherError("The weather service did not return seven complete days.")
 
     expected_units = {
-        "precipitation_sum": "mm",
+        "rain_sum": "mm",
         "temperature_2m_max": "°C",
         "et0_fao_evapotranspiration": "mm",
     }
@@ -78,8 +78,8 @@ def parse_weather(
     except (TypeError, ValueError) as exc:
         raise WeatherError("The weather service returned an invalid forecast date.") from exc
 
-    if len({row.day for row in rows}) != 7 or list(row.day for row in rows) != sorted(row.day for row in rows):
-        raise WeatherError("The forecast dates are duplicated or out of order.")
+    if any((rows[index + 1].day - rows[index].day).days != 1 for index in range(6)):
+        raise WeatherError("The forecast dates are not seven consecutive days.")
     if any(row.rain_mm < 0 or row.et0_mm < 0 for row in rows):
         raise WeatherError("The forecast contains a negative rain or ET₀ value.")
 

@@ -77,7 +77,7 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     rows = [
         {
             "Date": day.day.isoformat(),
-            "Precipitation (mm)": day.rain_mm,
+            "Rain (mm)": day.rain_mm,
             "Max temperature (°C)": day.max_temp_c,
             "Reference ET₀ (mm)": day.et0_mm,
         }
@@ -95,15 +95,15 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     st.write(f"**Crop:** {request.crop}  |  **Growth stage:** {request.growth_stage}")
     st.caption("Crop and stage are recorded for later recommendation features; they do not change this weather forecast.")
     a, b, c = st.columns(3)
-    a.metric("Forecast precipitation", f"{sum(day.rain_mm for day in result.days):.1f} mm", help="Sum of forecast daily precipitation; not measured rainfall.")
+    a.metric("Forecast rain", f"{sum(day.rain_mm for day in result.days):.1f} mm", help="Sum of forecast daily rain; not measured rainfall.")
     b.metric("Highest daily maximum", f"{max(day.max_temp_c for day in result.days):.1f} °C")
     c.metric("Reference ET₀ total", f"{sum(day.et0_mm for day in result.days):.1f} mm", help="Reference evapotranspiration for a well-watered grass surface; not a crop irrigation prescription.")
 
     st.dataframe(frame, hide_index=True, width="stretch")
     left, right = st.columns(2)
     with left:
-        st.markdown("**Forecast precipitation (mm/day)**")
-        st.bar_chart(frame, x="Date", y="Precipitation (mm)", y_label="mm", height=260)
+        st.markdown("**Forecast rain (mm/day)**")
+        st.bar_chart(frame, x="Date", y="Rain (mm)", y_label="mm", height=260)
     with right:
         st.markdown("**Daily maximum temperature (°C)**")
         st.line_chart(frame, x="Date", y="Max temperature (°C)", y_label="°C", height=260)
