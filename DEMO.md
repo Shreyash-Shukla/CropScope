@@ -8,7 +8,7 @@ Prepare with `streamlit run app.py`. Keep the Karnal example available as a back
 
 **0:55–1:25 — Satellite.** Show the Sentinel-2 scene ID and acquisition date, the usable-pixel percentage, and the cloud-masked NDVI image with mean and median. Explain that the rectangle can include non-crop land and NDVI indicates greenness rather than disease or yield.
 
-**1:25–1:50 — Checks.** Show the evidence under each suggestion. State whether the banner says **Gemini-ranked** or **Rule-based fallback**. The model ranking must not be described as live until a successful call has actually occurred.
+**1:25–1:50 — Checks.** Show the evidence under each suggestion. State whether the banner says **Gemini-ranked** or **Rule-based fallback**. A live Gemini ranking completed on 31 October 2026; the dated 30 October screenshot in the presentation shows the fallback before the key was configured.
 
 **1:50–2:00 — Reliability.** Explain that weather and satellite can fail independently. **Use saved result for this rectangle** shows original dates and a saved label. It never uses Karnal data for another rectangle.
 

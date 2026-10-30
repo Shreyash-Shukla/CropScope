@@ -50,7 +50,7 @@ class AIValidationTests(unittest.TestCase):
         client.models.generate_content.assert_called_once()
         call = client.models.generate_content.call_args
         self.assertEqual(call.kwargs["config"].response_mime_type, "application/json")
-        self.assertEqual(call.kwargs["model"], "gemini-flash-latest")
+        self.assertEqual(call.kwargs["model"], "gemini-3.1-flash-lite")
 
 
 if __name__ == "__main__":

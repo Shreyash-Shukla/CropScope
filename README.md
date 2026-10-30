@@ -12,7 +12,7 @@ py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-Open the local URL printed by Streamlit. Weather, satellite results, and rule-based checks need no key. To enable Gemini ranking, copy `.env.example` to `.env` and set `GEMINI_API_KEY` in that ignored local file, or set the variable in the shell that starts Streamlit. Do not put the key in a tracked file or chat message. The required live Gemini acceptance check remains pending until a key is configured.
+Open the local URL printed by Streamlit. Weather, satellite results, and rule-based checks need no key. To enable Gemini ranking, copy `.env.example` to `.env` and set `GEMINI_API_KEY` in that ignored local file, or set the variable in the shell that starts Streamlit. Do not put the key in a tracked file or chat message. A live Gemini ranking was verified on 31 October 2026.
 
 ## Select an area and analyze
 
@@ -30,23 +30,24 @@ The satellite section searches the previous 35 days in the [Element 84 Earth Sea
 
 Weather and satellite requests have separate loading and failure states: a failure in one still allows the other result to appear. Open-Meteo and catalog requests have 20-second network timeouts; image reads have 15-second network timeouts and a four-scene, 90-second candidate budget. If no recent suitable scene fully covers the rectangle, the app explains that and leaves the weather result available. Sentinel-2 systematic land coverage is approximately 56°S–84°N. The public catalog and image assets are best-effort services, so retrying may help after an outage.
 
-Code proposes a finite set of checks based on available forecast or usable NDVI evidence. Gemini, when configured, can only rank those checks and select their evidence IDs. The app validates every ID and displays code-controlled wording, so a malformed response falls back to the labeled rule order. If both sources fail and no same-area cache exists, it shows no recommendation. Suggestions do not assert soil moisture, diagnose disease, or prescribe irrigation or fertilizer amounts.
+Code proposes a finite set of checks based on available forecast or usable NDVI evidence. Gemini 3.1 Flash-Lite, when configured, can only rank those checks and select their evidence IDs. Its request has a 30-second timeout. The app validates every ID and displays code-controlled wording, so a malformed response falls back to the labeled rule order. If both sources fail and no same-area cache exists, it shows no recommendation. Suggestions do not assert soil moisture, diagnose disease, or prescribe irrigation or fertilizer amounts.
 
 Each successful live source is saved locally under `cache/`. A failed live request may display a saved result **only for the exact same rectangle**; **Use saved result for this rectangle** loads it without a network request. Saved results are explicitly labeled and retain the original forecast, acquisition, and fetch dates. A dated Karnal example is bundled in `sample_data/` for an offline demo. It is never substituted for a different rectangle. An old saved forecast is historical, not a current prediction.
 
-The saved Karnal example is **29.748–29.752° N, 77.048–77.052° E**. `sample_data/karnal_scene.json` retains the Phase 2 reference metadata; the keyed JSON files contain the dated Phase 5 weather and NDVI demo cache. [Karnal NDVI](screenshots/karnal_ndvi.png) and [suggestions](screenshots/karnal_suggestions.png) are screenshots from a live app run on 30 October 2026. The [two-minute demo script](DEMO.md) identifies what to show and how to use the backup cache. The [updated presentation](presentation/CropScope_Demo_2026-10-30.pptx) uses those observed results and labels the outstanding Gemini live check.
+The saved Karnal example is **29.748–29.752° N, 77.048–77.052° E**. `sample_data/karnal_scene.json` retains the Phase 2 reference metadata; the keyed JSON files contain the dated Phase 5 weather and NDVI demo cache. [Karnal NDVI](screenshots/karnal_ndvi.png) and [rule-based suggestions](screenshots/karnal_suggestions.png) are screenshots from a live app run on 30 October 2026, before the key was configured. A separate [Gemini-ranked result](screenshots/karnal_gemini.png) was captured on 31 October from the explicitly labeled saved same-area data. The [two-minute demo script](DEMO.md) identifies what to show and how to use the backup cache. The [updated presentation](presentation/CropScope_Demo_2026-10-31.pptx) uses the observed results and records the later live Gemini validation.
 
 To run focused checks:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv\Scripts\python.exe scripts\live_check.py
+.\.venv\Scripts\python.exe scripts\check_gemini.py
 ```
 
 The live check writes only to ignored `cache/`. Add `--refresh-demo-cache` to intentionally replace the dated Karnal sample in `sample_data/` after checking its provenance.
 
 ## Scope and secrets
 
-The [build plan](BUILD_PLAN.md) records the implementation and acceptance gates. Live weather and satellite checks completed for distinct rectangles in India, France, and Australia on 30 October 2026. The Gemini live call is still required to close Phase 4. No IoT hardware or model training is in scope.
+The [build plan](BUILD_PLAN.md) records the implementation and acceptance gates. Live weather and satellite checks completed for distinct rectangles in India, France, and Australia on 30 October 2026. A live Gemini 3.1 Flash-Lite call completed on 31 October 2026 and returned verified action and evidence IDs. No IoT hardware or model training is in scope.
 
 API keys belong in local environment variables or the ignored `.env` file. Never commit a key.

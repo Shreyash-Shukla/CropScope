@@ -1,6 +1,6 @@
 # CropScope — build plan
 
-**Scope agreed on 25 October 2026; status updated 31 October 2026.** Build a small, separate Python application called **CropScope**. Phases 0–3 are complete. The Phase 4 recommendation code and Phase 5 app, cache, demo, and presentation work are implemented and tested. Three map-drawn areas in India, France, and Australia returned live weather and satellite results. **Phase 4 acceptance remains open** until one live Gemini call succeeds with a locally configured API key; the app currently shows a labeled rule-based fallback. Do not claim the AI live call has completed.
+**Scope agreed on 25 October 2026; status updated 31 October 2026.** Build a small, separate Python application called **CropScope**. Phases 0–5 are complete. Three map-drawn areas in India, France, and Australia returned live weather and satellite results. A live Gemini 3.1 Flash-Lite call ranked three code-defined checks using only their required evidence IDs. The app retains a labeled rule-based fallback when Gemini is unavailable.
 
 ## 1. What the finished prototype will do
 

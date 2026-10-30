@@ -12,8 +12,8 @@ from models import AnalysisRequest
 from recommendations import Candidate, Evidence, Suggestion
 
 
-MODEL = "gemini-flash-latest"
-TIMEOUT_MS = 15_000
+MODEL = "gemini-3.1-flash-lite"
+TIMEOUT_MS = 30_000
 
 
 class AIError(Exception):
