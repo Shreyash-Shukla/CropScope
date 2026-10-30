@@ -3,6 +3,7 @@
 import io
 import json
 import math
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
@@ -25,6 +26,7 @@ COLLECTION = "sentinel-2-c1-l2a"
 LOOKBACK_DAYS = 35
 MAX_SCENE_CLOUD_PERCENT = 60.0
 MAX_CANDIDATES = 4
+SATELLITE_BUDGET_SECONDS = 90
 MIN_VALID_PIXEL_PERCENT = 10.0
 # SCL: vegetation, bare soil, water. All remaining classes are uncertain,
 # shadows, clouds, snow, saturated/defective, or no data.
@@ -210,6 +212,7 @@ def _preview_png(pixels: np.ma.MaskedArray) -> bytes:
 
 def fetch_satellite(area: AnalysisArea, *, now: datetime | None = None) -> SatelliteResult:
     """Try a bounded set of scenes; never substitute another area's image."""
+    deadline = time.monotonic() + SATELLITE_BUDGET_SECONDS
     if area.south < -56 or area.north > 84:
         raise NoSceneError("This area is outside Sentinel-2's systematic land coverage (about 56°S to 84°N).")
     candidates = search_scenes(area, now=now)
@@ -218,6 +221,8 @@ def fetch_satellite(area: AnalysisArea, *, now: datetime | None = None) -> Satel
 
     best_low_quality = None
     for item in candidates:
+        if time.monotonic() >= deadline:
+            break
         try:
             red = _read_band(item["assets"]["red"]["href"], area)
             nir = _read_aligned_band(item["assets"]["nir"]["href"], red)

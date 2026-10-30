@@ -1,6 +1,6 @@
 # CropScope
 
-CropScope is a small precision-farming decision-support prototype. A user can select a **rectangular analysis area anywhere on the map**, fetch a live seven-day weather forecast for its centre, and retrieve a recent Sentinel-2 Level-2A scene with cloud-masked NDVI and cropped red and near-infrared previews. AI-assisted recommendations are planned for a later phase.
+CropScope is a small precision-farming decision-support prototype. A user can select a **rectangular analysis area anywhere on the map**, fetch a live seven-day weather forecast for its centre, retrieve a recent Sentinel-2 Level-2A scene with cloud-masked NDVI, and see up to three evidence-backed field checks. Gemini can rank the checks when a local key is configured; a labeled rule-based fallback works without one.
 
 ## Run locally
 
@@ -12,13 +12,13 @@ py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-Open the local URL printed by Streamlit. No API key is required for Phases 1–3.
+Open the local URL printed by Streamlit. Weather, satellite results, and rule-based checks need no key. To enable Gemini ranking, copy `.env.example` to `.env` and set `GEMINI_API_KEY` in that ignored local file, or set the variable in the shell that starts Streamlit. Do not put the key in a tracked file or chat message. The required live Gemini acceptance check remains pending until a key is configured.
 
 ## Select an area and analyze
 
 1. Choose **Draw on map**. Zoom to the field, select the rectangle tool at the top left of the map, and drag across the land. Use the trash tool to remove an old drawing before drawing another. The map shows the outline, and CropScope shows its approximate area and edge coordinates.
 2. Alternatively, choose **Enter coordinates** and supply north, south, east, and west in decimal degrees. A preview map shows the outline. **Use Karnal example** provides a quick sample only; it is not required for other locations.
-3. Enter the crop and growth stage, then click **Analyze**. The weather request uses the rectangle's centre. The satellite catalog search uses all four rectangle edges, and image reads are limited to the selected area. Crop and stage are recorded for later recommendation features; they do not affect these data sources.
+3. Enter the crop and growth stage, then click **Analyze / retry live**. The weather request uses the rectangle's centre. The satellite catalog search uses all four rectangle edges, and image reads are limited to the selected area. Crop and stage inform action wording, but do not change or verify the source observations.
 
 The supported rectangle size is 0.01–9 km², with each side at most 5 km. A rectangle must have south below north and west left of east. Rectangles crossing the 180° meridian need to be drawn on one side at a time. These limits keep later 10 m satellite reads practical. The selected rectangle is an **analysis area**, not a surveyed field boundary; it may include non-crop land.
 
@@ -28,18 +28,25 @@ The app shows seven local dates, daily forecast rain (mm), maximum 2 m air tempe
 
 The satellite section searches the previous 35 days in the [Element 84 Earth Search STAC catalog](https://github.com/Element84/earth-search), considers scenes with at most 60% **scene-wide** cloud metadata, and attempts up to four promising scenes. It shows the chosen scene ID, acquisition and fetch times, cloud metadata, and cropped 10 m red (B04) and near-infrared (B08) previews. Each preview is contrast-enhanced for viewing. NDVI uses each asset's STAC scale and offset to convert band values to reflectance, aligns the 20 m scene-classification layer to the 10 m red grid by nearest-neighbor resampling, and excludes no-data, cloud, shadow, snow, uncertain, and invalid-reflectance pixels. Clear vegetation, bare soil, and water pixels are eligible. The app shows the usable-pixel percentage within the rectangle, mean and median NDVI, and a transparent-masked NDVI image. If fewer than 10% of pixels are usable, it tries another candidate scene and otherwise shows a quality message without a vegetation summary. Scene-wide cloud metadata alone does not measure quality in the selected rectangle. NDVI describes greenness; one image cannot identify a disease, prove crop type, or measure yield.
 
-Weather and satellite requests are independent: a failure in one still allows the other result to appear. If no recent suitable scene fully covers the rectangle, the app explains that and leaves the weather result available. Sentinel-2 systematic land coverage is approximately 56°S–84°N. The public catalog and image assets are best-effort services, so retrying may help after an outage.
+Weather and satellite requests have separate loading and failure states: a failure in one still allows the other result to appear. Open-Meteo and catalog requests have 20-second network timeouts; image reads have 15-second network timeouts and a four-scene, 90-second candidate budget. If no recent suitable scene fully covers the rectangle, the app explains that and leaves the weather result available. Sentinel-2 systematic land coverage is approximately 56°S–84°N. The public catalog and image assets are best-effort services, so retrying may help after an outage.
 
-The saved Karnal example is **29.748–29.752° N, 77.048–77.052° E**. `sample_data/karnal_scene.json` records a dated Phase 2 acquisition, source, and exact rectangle, with two captured PNG previews. These are reference artifacts only; the app never substitutes them for an arbitrary user-selected area.
+Code proposes a finite set of checks based on available forecast or usable NDVI evidence. Gemini, when configured, can only rank those checks and select their evidence IDs. The app validates every ID and displays code-controlled wording, so a malformed response falls back to the labeled rule order. If both sources fail and no same-area cache exists, it shows no recommendation. Suggestions do not assert soil moisture, diagnose disease, or prescribe irrigation or fertilizer amounts.
+
+Each successful live source is saved locally under `cache/`. A failed live request may display a saved result **only for the exact same rectangle**; **Use saved result for this rectangle** loads it without a network request. Saved results are explicitly labeled and retain the original forecast, acquisition, and fetch dates. A dated Karnal example is bundled in `sample_data/` for an offline demo. It is never substituted for a different rectangle. An old saved forecast is historical, not a current prediction.
+
+The saved Karnal example is **29.748–29.752° N, 77.048–77.052° E**. `sample_data/karnal_scene.json` retains the Phase 2 reference metadata; the keyed JSON files contain the dated Phase 5 weather and NDVI demo cache. [Karnal NDVI](screenshots/karnal_ndvi.png) and [suggestions](screenshots/karnal_suggestions.png) are screenshots from a live app run on 30 October 2026. The [two-minute demo script](DEMO.md) identifies what to show and how to use the backup cache. The [updated presentation](presentation/CropScope_Demo_2026-10-30.pptx) uses those observed results and labels the outstanding Gemini live check.
 
 To run focused checks:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe scripts\live_check.py
 ```
+
+The live check writes only to ignored `cache/`. Add `--refresh-demo-cache` to intentionally replace the dated Karnal sample in `sample_data/` after checking its provenance.
 
 ## Scope and secrets
 
-The [build plan](BUILD_PLAN.md) sets out foundation, selected-area weather, satellite scene selection, cloud-masked NDVI, AI-assisted recommendations, and demo hardening. Phase 3 adds area-specific NDVI and quality reporting; recommendations and demo hardening remain planned. No IoT hardware or model training is in scope.
+The [build plan](BUILD_PLAN.md) records the implementation and acceptance gates. Live weather and satellite checks completed for distinct rectangles in India, France, and Australia on 30 October 2026. The Gemini live call is still required to close Phase 4. No IoT hardware or model training is in scope.
 
-Future API keys belong in local environment variables or `.streamlit/secrets.toml`, both excluded from Git. Never commit a key.
+API keys belong in local environment variables or the ignored `.env` file. Never commit a key.

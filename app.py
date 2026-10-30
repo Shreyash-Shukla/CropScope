@@ -3,13 +3,14 @@
 import folium
 import pandas as pd
 import streamlit as st
+from pathlib import Path
 from folium.plugins import Draw, Geocoder
 from streamlit_folium import st_folium
 
+from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
+from cache import CacheStore
 from location import LocationError, SAMPLE_AREA, rectangle_from_geojson, validate_rectangle
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
-from satellite import NoSceneError, SatelliteError, fetch_satellite
-from weather import WeatherError, fetch_weather
 
 
 def draw_area() -> tuple[AnalysisArea | None, str | None]:
@@ -94,7 +95,7 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         f"Dates in {result.timezone}"
     )
     st.write(f"**Crop:** {request.crop}  |  **Growth stage:** {request.growth_stage}")
-    st.caption("Crop and stage are recorded for later recommendation features; they do not change this weather forecast.")
+    st.caption("Crop and stage inform the checks below; they do not change this weather forecast.")
     a, b, c = st.columns(3)
     a.metric("Forecast rain", f"{sum(day.rain_mm for day in result.days):.1f} mm", help="Sum of forecast daily rain; not measured rainfall.")
     b.metric("Highest daily maximum", f"{max(day.max_temp_c for day in result.days):.1f} °C")
@@ -149,9 +150,39 @@ def show_satellite(result: SatelliteResult) -> None:
     )
 
 
+def show_weather_state(state: SourceState, request: AnalysisRequest) -> None:
+    if state.cached:
+        st.info("Saved same-area forecast. Check its original dates and fetch time below; this is not a current forecast.")
+    if state.error:
+        st.warning(f"Live weather: {state.error}" if state.result else state.error)
+    if isinstance(state.result, WeatherResult):
+        show_forecast(state.result, request)
+
+
+def show_satellite_state(state: SourceState) -> None:
+    if state.cached:
+        st.info("Saved same-area satellite result. The scene acquisition and fetch dates below are unchanged.")
+    if state.error:
+        st.warning(f"Live satellite: {state.error}" if state.result else state.error)
+    if isinstance(state.result, SatelliteResult):
+        show_satellite(state.result)
+
+
+def show_suggestions(outcome: AnalysisOutcome) -> None:
+    st.subheader("Checks to consider next")
+    if not outcome.suggestions:
+        st.info("No supported suggestion is available from the current results. Retry the live sources or choose another area.")
+        return
+    st.caption(outcome.suggestion_source + " · Decision support only; verify conditions on site.")
+    for index, item in enumerate(outcome.suggestions, 1):
+        st.markdown(f"**{index}. {item.candidate.title}**")
+        st.write(item.candidate.action)
+        st.caption("Evidence: " + " ".join(piece.text for piece in item.evidence))
+
+
 st.set_page_config(page_title="CropScope", page_icon="🌱", layout="wide")
 st.title("CropScope")
-st.write("Select an agricultural area to see its forecast weather and a recent Sentinel-2 vegetation observation. The outlined rectangle is an analysis area, not a surveyed field boundary.")
+st.write("Select an agricultural area to see its forecast weather, a recent Sentinel-2 vegetation observation, and evidence-backed checks. The outlined rectangle is an analysis area, not a surveyed field boundary.")
 
 mode = st.radio(
     "Choose the analysis area",
@@ -194,45 +225,51 @@ with second:
         placeholder="Select a stage",
     )
 
-analyze = st.button("Analyze", type="primary")
+first_button, second_button = st.columns(2)
+with first_button:
+    analyze_live = st.button("Analyze / retry live", type="primary")
+with second_button:
+    use_saved = st.button("Use saved result for this rectangle")
 current_request = AnalysisRequest(area, crop, growth_stage) if area and crop and growth_stage else None
 if st.session_state.get("analysis_request") != current_request:
-    st.session_state.pop("weather_result", None)
-    st.session_state.pop("weather_error", None)
-    st.session_state.pop("satellite_result", None)
-    st.session_state.pop("satellite_error", None)
+    st.session_state.pop("analysis_outcome", None)
     st.session_state.pop("analysis_request", None)
 
-if analyze:
+if analyze_live or use_saved:
     if area is None:
         st.error(location_error or "Select a valid rectangle before analyzing.")
     elif not crop or not growth_stage:
         st.error("Enter a crop and select its growth stage before analyzing.")
     else:
         st.session_state.analysis_request = current_request
-        with st.spinner("Fetching weather for the selected area…"):
-            try:
-                st.session_state.weather_result = fetch_weather(area)
-                st.session_state.weather_error = None
-            except WeatherError as exc:
-                st.session_state.weather_result = None
-                st.session_state.weather_error = str(exc)
-        with st.spinner("Searching recent Sentinel-2 scenes, reading bands, and processing NDVI…"):
-            try:
-                st.session_state.satellite_result = fetch_satellite(area)
-                st.session_state.satellite_error = None
-            except (SatelliteError, NoSceneError) as exc:
-                st.session_state.satellite_result = None
-                st.session_state.satellite_error = str(exc)
+        weather_slot, satellite_slot, suggestion_slot = st.empty(), st.empty(), st.empty()
+        cache = CacheStore(Path(__file__).resolve().parent / "cache",
+                           Path(__file__).resolve().parent / "sample_data")
+        with st.status("Loading saved area data…" if use_saved else "Fetching live area data…", expanded=True) as progress:
+            progress.write("Weather: loading saved result…" if use_saved else "Weather: requesting forecast…")
+            def on_weather(state: SourceState) -> None:
+                progress.write("Weather: saved result loaded." if state.cached else
+                               "Weather: ready." if state.result else "Weather: unavailable.")
+                with weather_slot.container():
+                    show_weather_state(state, current_request)
+                progress.write("Satellite: loading saved result…" if use_saved else
+                               "Satellite: searching scenes, reading bands, and processing NDVI…")
 
-if st.session_state.get("weather_error"):
-    st.error(st.session_state.weather_error)
-    st.caption("You can press Analyze again to retry. The selected area is retained.")
-elif st.session_state.get("weather_result"):
-    show_forecast(st.session_state.weather_result, st.session_state.analysis_request)
+            def on_satellite(state: SourceState) -> None:
+                progress.write("Satellite: saved result loaded." if state.cached else
+                               "Satellite: ready." if state.result else "Satellite: unavailable.")
+                with satellite_slot.container():
+                    show_satellite_state(state)
 
-if st.session_state.get("satellite_error"):
-    st.warning(st.session_state.satellite_error)
-    st.caption("Weather results remain available above if the forecast succeeded. Press Analyze to retry the satellite search.")
-elif st.session_state.get("satellite_result"):
-    show_satellite(st.session_state.satellite_result)
+            outcome = run_analysis(current_request, cache, cached_only=use_saved,
+                                   on_weather=on_weather, on_satellite=on_satellite)
+            progress.write("Recommendations: validated AI ranking or rule-based fallback complete.")
+            progress.update(label="Analysis complete", state="complete")
+        st.session_state.analysis_outcome = outcome
+        with suggestion_slot.container():
+            show_suggestions(outcome)
+elif st.session_state.get("analysis_outcome"):
+    outcome = st.session_state.analysis_outcome
+    show_weather_state(outcome.weather, outcome.request)
+    show_satellite_state(outcome.satellite)
+    show_suggestions(outcome)

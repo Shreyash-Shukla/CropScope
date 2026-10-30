@@ -1,6 +1,6 @@
 # CropScope — build plan
 
-**Scope agreed on 25 October 2026; status updated 30 October 2026.** Build a small, separate Python application called **CropScope**. Phases 0–3 are implemented in this repository; later phases remain planned work. Phase 3 adds scale/offset-corrected, scene-classification-masked NDVI, area-specific pixel quality, and mean/median summaries.
+**Scope agreed on 25 October 2026; status updated 31 October 2026.** Build a small, separate Python application called **CropScope**. Phases 0–3 are complete. The Phase 4 recommendation code and Phase 5 app, cache, demo, and presentation work are implemented and tested. Three map-drawn areas in India, France, and Australia returned live weather and satellite results. **Phase 4 acceptance remains open** until one live Gemini call succeeds with a locally configured API key; the app currently shows a labeled rule-based fallback. Do not claim the AI live call has completed.
 
 ## 1. What the finished prototype will do
 
@@ -58,7 +58,7 @@ Fetch weather and satellite data independently, show progress labels (weather �
 
 **Satellite correctness requirements:** use the red and near-infrared asset scale *and offset* supplied in STAC metadata before calculating `(NIR − Red) / (NIR + Red)`; align the scene-classification raster to the 10 m bands with nearest-neighbor resampling; mask no-data, clouds, shadows, and other invalid pixels. Display the selected scene ID, acquisition date, scene cloud metadata, and valid-pixel percentage. Scene-wide cloud percentage alone is insufficient to judge the selected area.
 
-**AI guardrails:** code generates a finite list of action IDs from the weather, crop/stage, and vegetation observations. AI returns a structured ranking and short explanations referencing supplied evidence IDs. Code rejects unknown action IDs, missing evidence, malformed output, invented measurements, and overly specific input prescriptions. If the AI service fails, show a clearly marked rule-based fallback; the final project must also demonstrate at least one successful live AI call.
+**AI guardrails:** code generates a finite list of action IDs from the weather, crop/stage, and vegetation observations. AI returns a structured ranking and supporting evidence IDs. Code supplies the displayed action wording and evidence explanation, preventing generated measurements or input prescriptions from reaching the page. Code rejects unknown action IDs, missing evidence, and malformed output. If the AI service fails, show a clearly marked rule-based fallback; the final project must also demonstrate at least one successful live AI call.
 
 ## 3. Phases and acceptance gates
 
@@ -91,7 +91,7 @@ CropScope/
   README.md              # setup, data sources, demo, limitations
 ```
 
-This repository is the farming implementation, separate from the presentation workspace and the previous carbon-credit project. Phases 1–3 run on Python 3.13 with Rasterio 1.4.4.
+This repository is the farming implementation, separate from the presentation workspace and the previous carbon-credit project. The app runs on Python 3.13 with Rasterio 1.4.4.
 
 ## 5. What each teammate can own
 
