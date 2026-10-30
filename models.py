@@ -62,5 +62,10 @@ class SatelliteResult:
     fetched_at_utc: datetime
     red_preview_png: bytes
     nir_preview_png: bytes
+    ndvi_png: bytes | None
+    mean_ndvi: float | None
+    median_ndvi: float | None
+    valid_pixel_percent: float
+    quality_message: str | None
     width: int
     height: int

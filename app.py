@@ -1,4 +1,4 @@
-"""CropScope: selected-area weather and Phase 2 satellite acquisition."""
+"""CropScope: selected-area weather and Sentinel-2 vegetation processing."""
 
 import folium
 import pandas as pd
@@ -117,7 +117,7 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
 
 
 def show_satellite(result: SatelliteResult) -> None:
-    st.subheader("Sentinel-2 image acquisition")
+    st.subheader("Sentinel-2 vegetation observation")
     st.write(f"**Scene:** [{result.scene_id}]({result.catalog_url})")
     st.caption(
         f"Acquired {result.acquired_at_utc.strftime('%d %b %Y, %H:%M UTC')} · "
@@ -125,6 +125,17 @@ def show_satellite(result: SatelliteResult) -> None:
         f"Read {result.width} × {result.height} pixels per 10 m band within the selected rectangle · "
         f"Fetched {result.fetched_at_utc.strftime('%d %b %Y, %H:%M UTC')}"
     )
+    st.metric("Usable pixels in selected rectangle", f"{result.valid_pixel_percent:.1f}%")
+    if result.quality_message:
+        st.warning(result.quality_message)
+    else:
+        left_ndvi, right_ndvi = st.columns([2, 1])
+        with left_ndvi:
+            st.image(result.ndvi_png, caption="Cloud-masked NDVI · brown −1, pale 0, green +1 · transparent = excluded", width="stretch")
+        with right_ndvi:
+            st.metric("Mean NDVI", f"{result.mean_ndvi:.3f}")
+            st.metric("Median NDVI", f"{result.median_ndvi:.3f}")
+            st.caption("NDVI describes greenness in this analysis rectangle. It cannot identify a disease, prove crop type, or measure yield.")
     left, right = st.columns(2)
     with left:
         st.image(result.red_preview_png, caption="Red band (B04), contrast-enhanced preview", width="stretch")
@@ -132,14 +143,15 @@ def show_satellite(result: SatelliteResult) -> None:
         st.image(result.nir_preview_png, caption="Near-infrared band (B08), contrast-enhanced preview", width="stretch")
     st.caption(
         "Source: [Element 84 Earth Search / Copernicus Sentinel-2 L2A](https://earth-search.aws.element84.com/v1). "
-        "The contrast stretch is for viewing only. Scene-wide cloud cover does not describe cloud cover in this rectangle. "
-        "Cloud masking, reflectance, and NDVI are planned for Phase 3."
+        "Red and NIR previews use a contrast stretch for viewing only. NDVI uses STAC reflectance scale and offset, "
+        "with scene-classification masking of clouds, shadows, snow, uncertain pixels, and no-data. "
+        "Clear water pixels are included if present; draw tightly around one field."
     )
 
 
 st.set_page_config(page_title="CropScope", page_icon="🌱", layout="wide")
 st.title("CropScope")
-st.write("Select an agricultural area to see its forecast weather and recent Sentinel-2 band previews. The outlined rectangle is an analysis area, not a surveyed field boundary.")
+st.write("Select an agricultural area to see its forecast weather and a recent Sentinel-2 vegetation observation. The outlined rectangle is an analysis area, not a surveyed field boundary.")
 
 mode = st.radio(
     "Choose the analysis area",
@@ -205,7 +217,7 @@ if analyze:
             except WeatherError as exc:
                 st.session_state.weather_result = None
                 st.session_state.weather_error = str(exc)
-        with st.spinner("Searching recent Sentinel-2 scenes and reading band windows…"):
+        with st.spinner("Searching recent Sentinel-2 scenes, reading bands, and processing NDVI…"):
             try:
                 st.session_state.satellite_result = fetch_satellite(area)
                 st.session_state.satellite_error = None
