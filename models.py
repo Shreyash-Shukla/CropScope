@@ -50,3 +50,17 @@ class WeatherResult:
     timezone: str
     fetched_at_utc: datetime
     source_url: str
+
+
+@dataclass(frozen=True)
+class SatelliteResult:
+    area: AnalysisArea
+    scene_id: str
+    acquired_at_utc: datetime
+    scene_cloud_percent: float
+    catalog_url: str
+    fetched_at_utc: datetime
+    red_preview_png: bytes
+    nir_preview_png: bytes
+    width: int
+    height: int

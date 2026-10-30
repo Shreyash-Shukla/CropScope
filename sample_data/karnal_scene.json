@@ -1,0 +1,17 @@
+{
+  "label": "Karnal example",
+  "area": {
+    "south": 29.748,
+    "west": 77.048,
+    "north": 29.752,
+    "east": 77.052
+  },
+  "scene_id": "S2B_T43RFN_20261025T053358_L2A",
+  "acquired_at_utc": "2026-10-25T05:40:52.357000+00:00",
+  "scene_cloud_percent": 1.7e-05,
+  "catalog_url": "https://earth-search.aws.element84.com/v1/collections/sentinel-2-c1-l2a/items/S2B_T43RFN_20261025T053358_L2A",
+  "fetched_at_utc": "2026-10-30T18:07:05.513300+00:00",
+  "red_preview": "karnal_red.png",
+  "nir_preview": "karnal_nir.png",
+  "note": "Dated example only; not substituted for other selected areas. Previews are contrast-enhanced raw bands, not cloud-masked NDVI."
+}

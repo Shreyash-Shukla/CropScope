@@ -1,6 +1,6 @@
 # CropScope — build plan
 
-**Scope agreed on 25 October 2026.** Build a small, separate Python application called **CropScope**. Phases 0 and 1 are now implemented in this repository; later phases remain planned work.
+**Scope agreed on 25 October 2026; status updated 30 October 2026.** Build a small, separate Python application called **CropScope**. Phases 0, 1, and 2 are implemented in this repository; later phases remain planned work. Phase 2 provides area-specific Sentinel-2 scene search, provenance, and cropped red/NIR previews, without NDVI or cloud masking.
 
 ## 1. What the finished prototype will do
 
@@ -91,7 +91,7 @@ CropScope/
   README.md              # setup, data sources, demo, limitations
 ```
 
-This repository is the farming implementation, separate from the presentation workspace and the previous carbon-credit project. Phase 1 runs on Python 3.13; confirm the image-processing packages for the satellite phases before adding them.
+This repository is the farming implementation, separate from the presentation workspace and the previous carbon-credit project. Phases 1–2 run on Python 3.13 with Rasterio 1.4.4.
 
 ## 5. What each teammate can own
 

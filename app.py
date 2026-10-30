@@ -1,4 +1,4 @@
-"""CropScope Phase 1: select a rectangle and view its live weather forecast."""
+"""CropScope: selected-area weather and Phase 2 satellite acquisition."""
 
 import folium
 import pandas as pd
@@ -7,7 +7,8 @@ from folium.plugins import Draw, Geocoder
 from streamlit_folium import st_folium
 
 from location import LocationError, SAMPLE_AREA, rectangle_from_geojson, validate_rectangle
-from models import AnalysisArea, AnalysisRequest, WeatherResult
+from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
+from satellite import NoSceneError, SatelliteError, fetch_satellite
 from weather import WeatherError, fetch_weather
 
 
@@ -115,9 +116,30 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     )
 
 
+def show_satellite(result: SatelliteResult) -> None:
+    st.subheader("Sentinel-2 image acquisition")
+    st.write(f"**Scene:** [{result.scene_id}]({result.catalog_url})")
+    st.caption(
+        f"Acquired {result.acquired_at_utc.strftime('%d %b %Y, %H:%M UTC')} · "
+        f"Scene-wide cloud cover {result.scene_cloud_percent:.1f}% · "
+        f"Read {result.width} × {result.height} pixels per 10 m band within the selected rectangle · "
+        f"Fetched {result.fetched_at_utc.strftime('%d %b %Y, %H:%M UTC')}"
+    )
+    left, right = st.columns(2)
+    with left:
+        st.image(result.red_preview_png, caption="Red band (B04), contrast-enhanced preview", width="stretch")
+    with right:
+        st.image(result.nir_preview_png, caption="Near-infrared band (B08), contrast-enhanced preview", width="stretch")
+    st.caption(
+        "Source: [Element 84 Earth Search / Copernicus Sentinel-2 L2A](https://earth-search.aws.element84.com/v1). "
+        "The contrast stretch is for viewing only. Scene-wide cloud cover does not describe cloud cover in this rectangle. "
+        "Cloud masking, reflectance, and NDVI are planned for Phase 3."
+    )
+
+
 st.set_page_config(page_title="CropScope", page_icon="🌱", layout="wide")
 st.title("CropScope")
-st.write("Select an agricultural area to see its forecast weather. The outlined rectangle is an analysis area, not a surveyed field boundary.")
+st.write("Select an agricultural area to see its forecast weather and recent Sentinel-2 band previews. The outlined rectangle is an analysis area, not a surveyed field boundary.")
 
 mode = st.radio(
     "Choose the analysis area",
@@ -165,6 +187,8 @@ current_request = AnalysisRequest(area, crop, growth_stage) if area and crop and
 if st.session_state.get("analysis_request") != current_request:
     st.session_state.pop("weather_result", None)
     st.session_state.pop("weather_error", None)
+    st.session_state.pop("satellite_result", None)
+    st.session_state.pop("satellite_error", None)
     st.session_state.pop("analysis_request", None)
 
 if analyze:
@@ -181,9 +205,22 @@ if analyze:
             except WeatherError as exc:
                 st.session_state.weather_result = None
                 st.session_state.weather_error = str(exc)
+        with st.spinner("Searching recent Sentinel-2 scenes and reading band windows…"):
+            try:
+                st.session_state.satellite_result = fetch_satellite(area)
+                st.session_state.satellite_error = None
+            except (SatelliteError, NoSceneError) as exc:
+                st.session_state.satellite_result = None
+                st.session_state.satellite_error = str(exc)
 
 if st.session_state.get("weather_error"):
     st.error(st.session_state.weather_error)
     st.caption("You can press Analyze again to retry. The selected area is retained.")
 elif st.session_state.get("weather_result"):
     show_forecast(st.session_state.weather_result, st.session_state.analysis_request)
+
+if st.session_state.get("satellite_error"):
+    st.warning(st.session_state.satellite_error)
+    st.caption("Weather results remain available above if the forecast succeeded. Press Analyze to retry the satellite search.")
+elif st.session_state.get("satellite_result"):
+    show_satellite(st.session_state.satellite_result)
