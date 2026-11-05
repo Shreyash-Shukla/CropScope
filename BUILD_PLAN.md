@@ -1,6 +1,6 @@
 # CropScope — build plan
 
-**Scope agreed on 25 October 2026; status updated 31 October 2026.** Build a small, separate Python application called **CropScope**. Phases 0–5 are complete. Three map-drawn areas in India, France, and Australia returned live weather and satellite results. A live Gemini 3.1 Flash-Lite call ranked three code-defined checks using only their required evidence IDs. The app retains a labeled rule-based fallback when Gemini is unavailable.
+**Scope agreed on 25 October 2026; status updated November 2026.** Build a small, separate Python application called **CropScope**. Phases 0–6 are complete. Three map-drawn areas in India, France, and Australia returned live weather and satellite results. A live Gemini 3.1 Flash-Lite call ranked three code-defined checks using only their required evidence IDs. The app retains a labeled rule-based fallback when Gemini is unavailable. Phase 6 adds 7-day net water balance (P − ET₀), fieldwork suitability windows, and downloadable Markdown & JSON field advisory reports.
 
 ## 1. What the finished prototype will do
 
@@ -70,6 +70,7 @@ Fetch weather and satellite data independently, show progress labels (weather �
 | **3 — Vegetation processing** (about 1 day) | Apply band scale/offset, align the scene-classification layer, mask unusable pixels, calculate NDVI and mean/median/valid fraction, render the image, handle no-data scenes. | A known-value pixel check matches the expected NDVI; two geographically distinct user-selected areas produce their own image/summary or an honest quality message. |
 | **4 — Recommendations and AI** (about 1 day) | Generate safe candidate actions with transparent rules; send structured observations to Gemini; validate the structured reply; display up to three ranked suggestions and their evidence. | One live AI call completes; suggestions use only supplied facts and survive a malformed or unavailable AI response. |
 | **5 — Finish and present** (about 1 day) | Add independent loading/failure states, finite timeouts, same-area cache labels, credits, run instructions, focused tests, screenshots, and a two-minute demo script. Update the presentation only with results actually obtained. | At least three drawn agricultural areas in different parts of the world are exercised; weather-only, satellite-only, neither-source, fresh, and same-area cached cases behave correctly; another student can run the project from the README. |
+| **6 — Agro-climatic indicators & advisory export** | Add 7-day cumulative water balance (P − ET₀), daily fieldwork suitability guidance (spraying / machinery windows), and downloadable Markdown & JSON field advisory reports. | Full unit test coverage for agronomy calculations and report generation; reports include complete evidence, parameters, and honest boundaries. |
 
 The phases are sequential. Arbitrary location selection is **core scope**, not a stretch feature. If time becomes tight, simplify crop-specific wording or visual polish, but keep the ability to submit any valid location. The saved example only protects the live presentation from an external-service outage.
 

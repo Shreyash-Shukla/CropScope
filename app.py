@@ -7,10 +7,12 @@ from pathlib import Path
 from folium.plugins import Draw, Geocoder
 from streamlit_folium import st_folium
 
+from agronomy import compute_agro_climatic_summary
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
 from location import LocationError, SAMPLE_AREA, rectangle_from_geojson, validate_rectangle
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
+from reporting import generate_advisory_json, generate_advisory_markdown
 
 
 def draw_area() -> tuple[AnalysisArea | None, str | None]:
@@ -76,19 +78,29 @@ def preview_area(area: AnalysisArea) -> None:
 
 
 def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
+    summary = compute_agro_climatic_summary(result)
+    suitability_icons = {
+        "Favorable": "🟢 Favorable",
+        "Caution: Wet": "🟡 Caution: Wet",
+        "Caution: Heat": "🟡 Caution: Heat",
+        "Restricted: Rain": "🔴 Restricted: Rain",
+        "Restricted: Heat": "🔴 Restricted: Heat",
+    }
     rows = [
         {
-            "Date": day.day.isoformat(),
-            "Rain (mm)": day.rain_mm,
-            "Max temperature (°C)": day.max_temp_c,
-            "Reference ET₀ (mm)": day.et0_mm,
+            "Date": row.day.isoformat(),
+            "Rain (mm)": row.rain_mm,
+            "Max temp (°C)": row.max_temp_c,
+            "Ref ET₀ (mm)": row.et0_mm,
+            "Net P − ET₀ (mm)": row.net_balance_mm,
+            "Fieldwork window": suitability_icons.get(row.suitability, row.suitability),
         }
-        for day in result.days
+        for row in summary.days
     ]
     frame = pd.DataFrame(rows)
     latitude, longitude = result.area.center
 
-    st.subheader("Seven-day forecast")
+    st.subheader("Seven-day forecast & water balance")
     st.caption(
         f"Selected rectangle: {result.area.area_km2:.3f} km² · "
         f"Weather grid queried near its centre ({latitude:.5f}°, {longitude:.5f}°) · "
@@ -96,19 +108,31 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     )
     st.write(f"**Crop:** {request.crop}  |  **Growth stage:** {request.growth_stage}")
     st.caption("Crop and stage inform the checks below; they do not change this weather forecast.")
-    a, b, c = st.columns(3)
-    a.metric("Forecast rain", f"{sum(day.rain_mm for day in result.days):.1f} mm", help="Sum of forecast daily rain; not measured rainfall.")
-    b.metric("Highest daily maximum", f"{max(day.max_temp_c for day in result.days):.1f} °C")
-    c.metric("Reference ET₀ total", f"{sum(day.et0_mm for day in result.days):.1f} mm", help="Reference evapotranspiration for a well-watered grass surface; not a crop irrigation prescription.")
+    a, b, c, d = st.columns(4)
+    a.metric("Forecast rain", f"{summary.total_rain_mm:.1f} mm", help="Sum of forecast daily rain; not measured rainfall.")
+    b.metric("Highest daily max", f"{max(day.max_temp_c for day in result.days):.1f} °C")
+    c.metric("Reference ET₀ total", f"{summary.total_et0_mm:.1f} mm", help="Reference evapotranspiration for a well-watered grass surface; not a crop irrigation prescription.")
+    d.metric(
+        "Net water balance (P − ET₀)",
+        f"{summary.net_balance_mm:+.1f} mm",
+        delta=summary.status_label,
+        delta_color="normal" if summary.net_balance_mm >= 0 else "inverse",
+        help="Cumulative precipitation minus reference ET₀. Atmospheric indicator of drying vs wetting trend.",
+    )
 
     st.dataframe(frame, hide_index=True, width="stretch")
     left, right = st.columns(2)
     with left:
-        st.markdown("**Forecast rain (mm/day)**")
-        st.bar_chart(frame, x="Date", y="Rain (mm)", y_label="mm", height=260)
+        st.markdown("**Daily rain vs reference ET₀ (mm/day)**")
+        water_df = pd.DataFrame({
+            "Date": [row.day.isoformat() for row in summary.days],
+            "Rain (mm)": [row.rain_mm for row in summary.days],
+            "Reference ET₀ (mm)": [row.et0_mm for row in summary.days],
+        })
+        st.bar_chart(water_df, x="Date", y=["Rain (mm)", "Reference ET₀ (mm)"], height=260)
     with right:
         st.markdown("**Daily maximum temperature (°C)**")
-        st.line_chart(frame, x="Date", y="Max temperature (°C)", y_label="°C", height=260)
+        st.line_chart(frame, x="Date", y="Max temp (°C)", y_label="°C", height=260)
 
     st.caption(
         f"Fetched {result.fetched_at_utc.strftime('%d %b %Y, %H:%M UTC')} from "
@@ -178,6 +202,32 @@ def show_suggestions(outcome: AnalysisOutcome) -> None:
         st.markdown(f"**{index}. {item.candidate.title}**")
         st.write(item.candidate.action)
         st.caption("Evidence: " + " ".join(piece.text for piece in item.evidence))
+
+
+def show_export_section(outcome: AnalysisOutcome) -> None:
+    st.divider()
+    st.subheader("Field advisory report export")
+    st.caption("Download a complete, dated advisory report containing coordinates, crop stage, agro-climatic water balance, satellite vegetation metrics, and prioritized checks.")
+    dl_left, dl_right = st.columns(2)
+    crop_slug = outcome.request.crop.lower().replace(" ", "_") if outcome.request.crop else "field"
+    center = outcome.request.area.center
+    filename_base = f"cropscope_advisory_{crop_slug}_{center[0]:.2f}_{center[1]:.2f}"
+    with dl_left:
+        st.download_button(
+            label="📥 Download Advisory Report (Markdown)",
+            data=generate_advisory_markdown(outcome),
+            file_name=f"{filename_base}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with dl_right:
+        st.download_button(
+            label="📥 Download Raw Analysis (JSON)",
+            data=generate_advisory_json(outcome),
+            file_name=f"{filename_base}.json",
+            mime="application/json",
+            use_container_width=True,
+        )
 
 
 st.set_page_config(page_title="CropScope", page_icon="🌱", layout="wide")
@@ -268,8 +318,10 @@ if analyze_live or use_saved:
         st.session_state.analysis_outcome = outcome
         with suggestion_slot.container():
             show_suggestions(outcome)
+            show_export_section(outcome)
 elif st.session_state.get("analysis_outcome"):
     outcome = st.session_state.analysis_outcome
     show_weather_state(outcome.weather, outcome.request)
     show_satellite_state(outcome.satellite)
     show_suggestions(outcome)
+    show_export_section(outcome)
