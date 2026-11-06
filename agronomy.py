@@ -80,3 +80,4 @@ def compute_agro_climatic_summary(weather: WeatherResult) -> AgroClimaticSummary
         favorable_days_count=favorable_count,
         days=tuple(daily_records),
     )
+

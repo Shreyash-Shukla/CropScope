@@ -205,3 +205,4 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
         }
 
     return json.dumps(data, indent=2)
+

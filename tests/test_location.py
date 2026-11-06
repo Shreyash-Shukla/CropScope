@@ -1,6 +1,6 @@
 import unittest
 
-from location import LocationError, rectangle_from_geojson, validate_rectangle
+from location import LocationError, SAMPLE_PRESETS, rectangle_from_geojson, validate_rectangle
 
 
 class RectangleSelectionTests(unittest.TestCase):
@@ -39,6 +39,13 @@ class RectangleSelectionTests(unittest.TestCase):
         }
         with self.assertRaises(LocationError):
             rectangle_from_geojson(drawing)
+
+
+    def test_sample_presets_are_valid(self):
+        self.assertGreaterEqual(len(SAMPLE_PRESETS), 3)
+        for name, preset in SAMPLE_PRESETS.items():
+            validated = validate_rectangle(preset.south, preset.west, preset.north, preset.east)
+            self.assertEqual(validated, preset)
 
 
 if __name__ == "__main__":

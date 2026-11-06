@@ -11,7 +11,12 @@ MIN_AREA_KM2 = 0.01
 MAX_AREA_KM2 = 9.0
 MAX_SIDE_KM = 5.0
 
-SAMPLE_AREA = AnalysisArea(south=29.748, west=77.048, north=29.752, east=77.052)
+SAMPLE_PRESETS = {
+    "Karnal, Haryana, India": AnalysisArea(south=29.748, west=77.048, north=29.752, east=77.052),
+    "Beauce Region, France": AnalysisArea(south=48.248, west=1.698, north=48.252, east=1.702),
+    "Riverina, NSW, Australia": AnalysisArea(south=-34.452, west=146.048, north=-34.448, east=146.052),
+}
+SAMPLE_AREA = SAMPLE_PRESETS["Karnal, Haryana, India"]
 
 
 class LocationError(ValueError):

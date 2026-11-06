@@ -10,14 +10,34 @@ from streamlit_folium import st_folium
 from agronomy import compute_agro_climatic_summary
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
-from location import LocationError, SAMPLE_AREA, rectangle_from_geojson, validate_rectangle
+from location import LocationError, SAMPLE_AREA, SAMPLE_PRESETS, rectangle_from_geojson, validate_rectangle
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
 from reporting import generate_advisory_json, generate_advisory_markdown
 
 
+def add_map_layers(map_obj: folium.Map) -> None:
+    folium.TileLayer(
+        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap &copy; CartoDB",
+        name="Day / Light Mode",
+    ).add_to(map_obj)
+    folium.TileLayer(
+        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap &copy; CartoDB",
+        name="Night / Dark Mode",
+    ).add_to(map_obj)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="&copy; Esri World Imagery",
+        name="Satellite View",
+    ).add_to(map_obj)
+    folium.LayerControl(position="topright", collapsed=True).add_to(map_obj)
+
+
 def draw_area() -> tuple[AnalysisArea | None, str | None]:
-    st.write("Zoom to your location, choose the rectangle tool at the top left, and drag across one field. Use the trash tool to clear it before drawing another.")
+    st.write("Zoom to your location, choose the rectangle tool at the top left, and drag across one field. Use the layer icon (top right) to switch between Day/Night/Satellite maps. Use the trash tool to clear before drawing another.")
     map_view = folium.Map(location=[18, 0], zoom_start=2, control_scale=True)
+    add_map_layers(map_view)
     Geocoder(collapsed=True).add_to(map_view)
     Draw(
         export=False,
@@ -73,6 +93,7 @@ def preview_area(area: AnalysisArea) -> None:
         fill=True,
         fill_opacity=0.16,
     ).add_to(preview)
+    add_map_layers(preview)
     preview.fit_bounds([[area.south, area.west], [area.north, area.east]])
     st_folium(preview, key="area_preview", height=320, use_container_width=True, returned_objects=[])
 
@@ -86,13 +107,25 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         "Restricted: Rain": "🔴 Restricted: Rain",
         "Restricted: Heat": "🔴 Restricted: Heat",
     }
+
+    hdr_col, unit_col = st.columns([3, 1])
+    with hdr_col:
+        st.subheader("Seven-day forecast & water balance")
+    with unit_col:
+        is_imperial = st.toggle("Imperial units (°F, in)", value=False)
+
+    temp_unit = "°F" if is_imperial else "°C"
+    len_unit = "in" if is_imperial else "mm"
+    to_temp = lambda c: round(c * 9 / 5 + 32, 1) if is_imperial else round(c, 1)
+    to_len = lambda mm: round(mm / 25.4, 2) if is_imperial else round(mm, 1)
+
     rows = [
         {
             "Date": row.day.isoformat(),
-            "Rain (mm)": row.rain_mm,
-            "Max temp (°C)": row.max_temp_c,
-            "Ref ET₀ (mm)": row.et0_mm,
-            "Net P − ET₀ (mm)": row.net_balance_mm,
+            f"Rain ({len_unit})": to_len(row.rain_mm),
+            f"Max temp ({temp_unit})": to_temp(row.max_temp_c),
+            f"Ref ET₀ ({len_unit})": to_len(row.et0_mm),
+            f"Net P − ET₀ ({len_unit})": to_len(row.net_balance_mm),
             "Fieldwork window": suitability_icons.get(row.suitability, row.suitability),
         }
         for row in summary.days
@@ -100,7 +133,6 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     frame = pd.DataFrame(rows)
     latitude, longitude = result.area.center
 
-    st.subheader("Seven-day forecast & water balance")
     st.caption(
         f"Selected rectangle: {result.area.area_km2:.3f} km² · "
         f"Weather grid queried near its centre ({latitude:.5f}°, {longitude:.5f}°) · "
@@ -109,12 +141,12 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     st.write(f"**Crop:** {request.crop}  |  **Growth stage:** {request.growth_stage}")
     st.caption("Crop and stage inform the checks below; they do not change this weather forecast.")
     a, b, c, d = st.columns(4)
-    a.metric("Forecast rain", f"{summary.total_rain_mm:.1f} mm", help="Sum of forecast daily rain; not measured rainfall.")
-    b.metric("Highest daily max", f"{max(day.max_temp_c for day in result.days):.1f} °C")
-    c.metric("Reference ET₀ total", f"{summary.total_et0_mm:.1f} mm", help="Reference evapotranspiration for a well-watered grass surface; not a crop irrigation prescription.")
+    a.metric("Forecast rain", f"{to_len(summary.total_rain_mm)} {len_unit}", help="Sum of forecast daily rain; not measured rainfall.")
+    b.metric("Highest daily max", f"{to_temp(max(day.max_temp_c for day in result.days))} {temp_unit}")
+    c.metric("Reference ET₀ total", f"{to_len(summary.total_et0_mm)} {len_unit}", help="Reference evapotranspiration for a well-watered grass surface; not a crop irrigation prescription.")
     d.metric(
-        "Net water balance (P − ET₀)",
-        f"{summary.net_balance_mm:+.1f} mm",
+        f"Net water balance ({len_unit})",
+        f"{to_len(summary.net_balance_mm):+0.2f if is_imperial else summary.net_balance_mm:+0.1f} {len_unit}",
         delta=summary.status_label,
         delta_color="normal" if summary.net_balance_mm >= 0 else "inverse",
         help="Cumulative precipitation minus reference ET₀. Atmospheric indicator of drying vs wetting trend.",
@@ -123,16 +155,16 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     st.dataframe(frame, hide_index=True, width="stretch")
     left, right = st.columns(2)
     with left:
-        st.markdown("**Daily rain vs reference ET₀ (mm/day)**")
+        st.markdown(f"**Daily rain vs reference ET₀ ({len_unit}/day)**")
         water_df = pd.DataFrame({
             "Date": [row.day.isoformat() for row in summary.days],
-            "Rain (mm)": [row.rain_mm for row in summary.days],
-            "Reference ET₀ (mm)": [row.et0_mm for row in summary.days],
+            f"Rain ({len_unit})": [to_len(row.rain_mm) for row in summary.days],
+            f"Reference ET₀ ({len_unit})": [to_len(row.et0_mm) for row in summary.days],
         })
-        st.bar_chart(water_df, x="Date", y=["Rain (mm)", "Reference ET₀ (mm)"], height=260)
+        st.bar_chart(water_df, x="Date", y=[f"Rain ({len_unit})", f"Reference ET₀ ({len_unit})"], height=260)
     with right:
-        st.markdown("**Daily maximum temperature (°C)**")
-        st.line_chart(frame, x="Date", y="Max temp (°C)", y_label="°C", height=260)
+        st.markdown(f"**Daily maximum temperature ({temp_unit})**")
+        st.line_chart(frame, x="Date", y=f"Max temp ({temp_unit})", y_label=temp_unit, height=260)
 
     st.caption(
         f"Fetched {result.fetched_at_utc.strftime('%d %b %Y, %H:%M UTC')} from "
@@ -236,7 +268,7 @@ st.write("Select an agricultural area to see its forecast weather, a recent Sent
 
 mode = st.radio(
     "Choose the analysis area",
-    ["Draw on map", "Enter coordinates", "Use Karnal example"],
+    ["Draw on map", "Enter coordinates", "Use sample preset"],
     horizontal=True,
 )
 if st.session_state.get("location_mode") != mode:
@@ -247,8 +279,14 @@ if mode == "Draw on map":
 elif mode == "Enter coordinates":
     area, location_error = coordinate_area()
 else:
-    st.write("Saved example near Karnal, Haryana. You can instead draw or enter a rectangle anywhere supported by the weather service.")
-    area, location_error = SAMPLE_AREA, None
+    preset_name = st.selectbox(
+        "Select sample farmland location",
+        list(SAMPLE_PRESETS.keys()),
+        index=0,
+        help="Pre-configured sample areas in India, Europe, and Australia.",
+    )
+    st.caption(f"Preset loaded: **{preset_name}**. You can also freely draw or enter coordinates anywhere.")
+    area, location_error = SAMPLE_PRESETS[preset_name], None
     preview_area(area)
 
 if location_error:
