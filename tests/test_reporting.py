@@ -49,6 +49,7 @@ class ReportingTests(unittest.TestCase):
         self.assertIn("Check drainage", md)
         self.assertIn("Decision-Support Boundaries", md)
         self.assertIn("Net Atmospheric Water Balance", md)
+        self.assertIn("Field Operations Windows", md)
         self.assertIn("| Date | Rain (mm) | Max Temp (°C) |", md)
 
     def test_markdown_partial_sources(self):
@@ -74,6 +75,7 @@ class ReportingTests(unittest.TestCase):
         self.assertIn("weather", data)
         self.assertIn("satellite", data)
         self.assertEqual(data["weather"]["favorable_days_count"], 1)
+        self.assertIn("operational_windows", data["weather"])
         self.assertEqual(data["satellite"]["scene_id"], "scene-karnal-123")
         self.assertEqual(len(data["suggestions"]), 1)
 

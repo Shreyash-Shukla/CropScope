@@ -7,7 +7,7 @@ from pathlib import Path
 from folium.plugins import Draw, Geocoder
 from streamlit_folium import st_folium
 
-from agronomy import compute_agro_climatic_summary
+from agronomy import compute_agro_climatic_summary, evaluate_operational_windows
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
 from location import LocationError, SAMPLE_AREA, SAMPLE_PRESETS, rectangle_from_geojson, validate_rectangle
@@ -166,6 +166,13 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         st.markdown(f"**Daily maximum temperature ({temp_unit})**")
         st.line_chart(frame, x="Date", y=f"Max temp ({temp_unit})", y_label=temp_unit, height=260)
 
+    windows = evaluate_operational_windows(result)
+    with st.expander("🚜 Field Operations Planner (7-day windows)", expanded=False):
+        op1, op2, op3 = st.columns(3)
+        op1.metric("🚜 Machinery Access", f"{len(windows.machinery_accessible_days)} / 7 days", help="Low soil saturation risk; minimal chance of field rutting.")
+        op2.metric("🚿 Spraying Window", f"{len(windows.spraying_favorable_days)} / 7 days", help="Low droplet volatilization (<32°C) and minimal rain wash-off (<2mm).")
+        op3.metric("🔍 Ground Scouting", f"{len(windows.scouting_recommended_days)} / 7 days", help="Favorable conditions for crop walks and visual inspection.")
+
     st.caption(
         f"Fetched {result.fetched_at_utc.strftime('%d %b %Y, %H:%M UTC')} from "
         "[Open-Meteo](https://open-meteo.com/en/docs). "
@@ -188,7 +195,22 @@ def show_satellite(result: SatelliteResult) -> None:
     else:
         left_ndvi, right_ndvi = st.columns([2, 1])
         with left_ndvi:
-            st.image(result.ndvi_png, caption="Cloud-masked NDVI · brown −1, pale 0, green +1 · transparent = excluded", width="stretch")
+            st.image(result.ndvi_png, caption="Cloud-masked NDVI · transparent = excluded", width="stretch")
+            st.markdown(
+                """
+                <div style="margin-top: 4px; margin-bottom: 8px;">
+                  <div style="display: flex; justify-content: space-between; font-size: 11px; color: #555;">
+                    <span>−1.0 (Water)</span>
+                    <span>0.0 (Soil)</span>
+                    <span>+0.3 (Sparse)</span>
+                    <span>+0.6 (Moderate)</span>
+                    <span>+1.0 (Dense)</span>
+                  </div>
+                  <div style="height: 10px; width: 100%; border-radius: 4px; background: linear-gradient(to right, rgb(117,72,43), rgb(221,209,164) 50%, rgb(187,215,126) 65%, rgb(64,148,78) 80%, rgb(15,78,44) 100%);"></div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         with right_ndvi:
             st.metric("Mean NDVI", f"{result.mean_ndvi:.3f}")
             st.metric("Median NDVI", f"{result.median_ndvi:.3f}")

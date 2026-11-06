@@ -81,3 +81,32 @@ def compute_agro_climatic_summary(weather: WeatherResult) -> AgroClimaticSummary
         days=tuple(daily_records),
     )
 
+
+@dataclass(frozen=True)
+class OperationalWindows:
+    spraying_favorable_days: tuple[date, ...]
+    machinery_accessible_days: tuple[date, ...]
+    scouting_recommended_days: tuple[date, ...]
+
+
+def evaluate_operational_windows(weather: WeatherResult) -> OperationalWindows:
+    """Identify dedicated operational windows for farm management."""
+    spraying = []
+    machinery = []
+    scouting = []
+
+    for day in weather.days:
+        if day.rain_mm < 10.0:
+            machinery.append(day.day)
+        if day.rain_mm < 2.0 and day.max_temp_c < 32.0:
+            spraying.append(day.day)
+        if day.rain_mm < 5.0 and day.max_temp_c < 36.0:
+            scouting.append(day.day)
+
+    return OperationalWindows(
+        spraying_favorable_days=tuple(spraying),
+        machinery_accessible_days=tuple(machinery),
+        scouting_recommended_days=tuple(scouting),
+    )
+
+

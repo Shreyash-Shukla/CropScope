@@ -12,6 +12,7 @@ from satellite import (
     BandWindow,
     NoSceneError,
     _ndvi,
+    _ndvi_png,
     _preview_png,
     _savi,
     compute_canopy_zones,
@@ -136,6 +137,14 @@ class SatelliteTests(unittest.TestCase):
         self.assertEqual(zones["Sparse / Emerging (0.20-0.35)"], 20.0)
         self.assertEqual(zones["Bare Soil / Non-Vegetated (0.00-0.20)"], 20.0)
         self.assertEqual(zones["Water / Negative Index (<0.00)"], 20.0)
+
+    def test_ndvi_png_colormaps(self):
+        ndvi_mock = np.ma.array([[0.5, -0.2], [0.8, 0.1]])
+        for cmap in ("agronomic", "viridis", "rdylgn"):
+            png = _ndvi_png(ndvi_mock, colormap=cmap)
+            img = Image.open(io.BytesIO(png))
+            self.assertEqual(img.mode, "RGBA")
+            self.assertEqual(img.size, (2, 2))
 
 
 if __name__ == "__main__":

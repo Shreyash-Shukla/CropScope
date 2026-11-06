@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timezone
 
-from agronomy import compute_agro_climatic_summary
+from agronomy import compute_agro_climatic_summary, evaluate_operational_windows
 from analysis import AnalysisOutcome
 from models import SatelliteResult, WeatherResult
 
@@ -37,6 +37,7 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
     weather_res = outcome.weather.result
     if isinstance(weather_res, WeatherResult):
         summary = compute_agro_climatic_summary(weather_res)
+        windows = evaluate_operational_windows(weather_res)
         source_label = "Saved cache" if outcome.weather.cached else "Live Open-Meteo API"
         lines.extend([
             f"- **Data Source:** {source_label} ({weather_res.source_url})",
@@ -46,6 +47,14 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
             f"- **Total Reference ET₀:** {summary.total_et0_mm:.1f} mm",
             f"- **Net Atmospheric Water Balance (P − ET₀):** {summary.net_balance_mm:+.1f} mm ({summary.status_label})",
             f"- **Favorable Fieldwork Days:** {summary.favorable_days_count} of {len(summary.days)} days",
+        ])
+        windows = evaluate_operational_windows(weather_res)
+        lines.append(
+            f"- **Field Operations Windows:** {len(windows.spraying_favorable_days)} spraying days, "
+            f"{len(windows.machinery_accessible_days)} machinery access days, "
+            f"{len(windows.scouting_recommended_days)} scouting days"
+        )
+        lines.extend([
             "",
             "| Date | Rain (mm) | Max Temp (°C) | Ref ET₀ (mm) | Net (P − ET₀) | Fieldwork Window | Notes |",
             "| --- | ---: | ---: | ---: | ---: | --- | --- |",
@@ -174,6 +183,7 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
 
     if isinstance(weather_res, WeatherResult):
         summary = compute_agro_climatic_summary(weather_res)
+        windows = evaluate_operational_windows(weather_res)
         data["weather"] = {
             "cached": outcome.weather.cached,
             "timezone": weather_res.timezone,
@@ -184,6 +194,11 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
             "net_balance_mm": summary.net_balance_mm,
             "water_status": summary.status_label,
             "favorable_days_count": summary.favorable_days_count,
+            "operational_windows": {
+                "spraying_days": [d.isoformat() for d in windows.spraying_favorable_days],
+                "machinery_days": [d.isoformat() for d in windows.machinery_accessible_days],
+                "scouting_days": [d.isoformat() for d in windows.scouting_recommended_days],
+            },
             "days": [
                 {
                     "date": d.day.isoformat(),

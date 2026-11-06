@@ -231,11 +231,20 @@ def compute_canopy_zones(ndvi: np.ma.MaskedArray) -> dict[str, float]:
     }
 
 
-def _ndvi_png(ndvi: np.ma.MaskedArray) -> bytes:
-    """RGBA map: brown below zero, pale near zero, greener as NDVI rises."""
-    stops = np.array([-1.0, 0.0, 0.3, 0.6, 1.0])
-    colors = np.array([[117, 72, 43], [221, 209, 164], [187, 215, 126],
-                       [64, 148, 78], [15, 78, 44]], dtype=np.float32)
+def _ndvi_png(ndvi: np.ma.MaskedArray, colormap: str = "agronomic") -> bytes:
+    """RGBA map: support standard agronomic, viridis, and rdylgn palettes."""
+    if colormap == "viridis":
+        stops = np.array([-1.0, -0.2, 0.2, 0.6, 1.0])
+        colors = np.array([[68, 1, 84], [59, 82, 139], [33, 145, 140],
+                           [94, 201, 98], [253, 231, 37]], dtype=np.float32)
+    elif colormap == "rdylgn":
+        stops = np.array([-1.0, 0.0, 0.3, 0.6, 1.0])
+        colors = np.array([[215, 25, 28], [253, 174, 97], [255, 255, 191],
+                           [166, 217, 106], [26, 150, 65]], dtype=np.float32)
+    else:
+        stops = np.array([-1.0, 0.0, 0.3, 0.6, 1.0])
+        colors = np.array([[117, 72, 43], [221, 209, 164], [187, 215, 126],
+                           [64, 148, 78], [15, 78, 44]], dtype=np.float32)
     values = np.clip(ndvi.filled(0), -1, 1)
     rgb = np.stack([np.interp(values, stops, colors[:, channel]) for channel in range(3)], axis=-1).astype(np.uint8)
     alpha = (~np.ma.getmaskarray(ndvi)).astype(np.uint8) * 255

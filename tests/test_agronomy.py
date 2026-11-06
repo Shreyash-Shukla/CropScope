@@ -3,8 +3,10 @@ from datetime import date, timedelta
 
 from agronomy import (
     AgroClimaticSummary,
+    OperationalWindows,
     compute_agro_climatic_summary,
     evaluate_fieldwork_suitability,
+    evaluate_operational_windows,
 )
 from location import SAMPLE_AREA
 from models import ForecastDay, WeatherResult
@@ -66,6 +68,22 @@ class AgronomyTests(unittest.TestCase):
         self.assertEqual(summary.net_balance_mm, 91.0)
         self.assertIn("Surplus", summary.status_label)
         self.assertEqual(summary.favorable_days_count, 0)  # Rain >= 10 on all days
+
+
+    def test_evaluate_operational_windows(self):
+        days = (
+            ForecastDay(date(2026, 11, 1), 0.0, 26.0, 3.0),   # optimal spraying, machinery, scouting
+            ForecastDay(date(2026, 11, 2), 3.0, 28.0, 3.2),   # caution wet: machinery & scouting ok, no spray
+            ForecastDay(date(2026, 11, 3), 15.0, 24.0, 2.0),  # heavy rain: none
+            ForecastDay(date(2026, 11, 4), 0.0, 34.0, 4.0),   # heat: machinery & scouting ok, no spray
+        )
+        weather = WeatherResult(SAMPLE_AREA, days, "UTC", date(2026, 11, 1), "http://test")
+        windows = evaluate_operational_windows(weather)
+
+        self.assertIsInstance(windows, OperationalWindows)
+        self.assertEqual(len(windows.spraying_favorable_days), 1)
+        self.assertEqual(len(windows.machinery_accessible_days), 3)
+        self.assertEqual(len(windows.scouting_recommended_days), 3)
 
 
 if __name__ == "__main__":
