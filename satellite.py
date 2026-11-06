@@ -182,6 +182,55 @@ def _ndvi(red: np.ma.MaskedArray, nir: np.ma.MaskedArray,
     return np.ma.array(values, mask=~valid)
 
 
+def _savi(red: np.ma.MaskedArray, nir: np.ma.MaskedArray,
+          scl: np.ma.MaskedArray, red_scale: tuple[float, float],
+          nir_scale: tuple[float, float], l_factor: float = 0.5) -> np.ma.MaskedArray:
+    """Calculate Soil-Adjusted Vegetation Index (SAVI) with soil factor L (default 0.5)."""
+    if red.shape != nir.shape or red.shape != scl.shape:
+        raise SatelliteError("The scene layers could not be aligned for SAVI.")
+    red_values = red.astype(np.float32).filled(np.nan) * red_scale[0] + red_scale[1]
+    nir_values = nir.astype(np.float32).filled(np.nan) * nir_scale[0] + nir_scale[1]
+    scl_values = scl.filled(0)
+    denominator = nir_values + red_values + l_factor
+    valid = (
+        ~np.ma.getmaskarray(red) & ~np.ma.getmaskarray(nir) &
+        ~np.ma.getmaskarray(scl) & np.isin(scl_values, CLEAR_SCL_CLASSES) &
+        np.isfinite(red_values) & np.isfinite(nir_values) &
+        (red_values >= 0) & (nir_values >= 0) & (denominator > 0)
+    )
+    values = np.zeros(red.shape, dtype=np.float32)
+    np.divide((nir_values - red_values) * (1.0 + l_factor), denominator, out=values, where=valid)
+    valid &= np.isfinite(values) & (values >= -1.5) & (values <= 1.5)
+    return np.ma.array(values, mask=~valid)
+
+
+def compute_canopy_zones(ndvi: np.ma.MaskedArray) -> dict[str, float]:
+    """Calculate the percentage of valid pixels within agronomic vegetation tiers."""
+    valid_pixels = ndvi.compressed()
+    total = len(valid_pixels)
+    if total == 0:
+        return {
+            "Dense Canopy (>0.60)": 0.0,
+            "Moderate Canopy (0.35-0.60)": 0.0,
+            "Sparse / Emerging (0.20-0.35)": 0.0,
+            "Bare Soil / Non-Vegetated (0.00-0.20)": 0.0,
+            "Water / Negative Index (<0.00)": 0.0,
+        }
+    dense = float(np.count_nonzero(valid_pixels > 0.60)) / total * 100.0
+    moderate = float(np.count_nonzero((valid_pixels >= 0.35) & (valid_pixels <= 0.60))) / total * 100.0
+    sparse = float(np.count_nonzero((valid_pixels >= 0.20) & (valid_pixels < 0.35))) / total * 100.0
+    bare = float(np.count_nonzero((valid_pixels >= 0.00) & (valid_pixels < 0.20))) / total * 100.0
+    water_neg = float(np.count_nonzero(valid_pixels < 0.00)) / total * 100.0
+
+    return {
+        "Dense Canopy (>0.60)": round(dense, 1),
+        "Moderate Canopy (0.35-0.60)": round(moderate, 1),
+        "Sparse / Emerging (0.20-0.35)": round(sparse, 1),
+        "Bare Soil / Non-Vegetated (0.00-0.20)": round(bare, 1),
+        "Water / Negative Index (<0.00)": round(water_neg, 1),
+    }
+
+
 def _ndvi_png(ndvi: np.ma.MaskedArray) -> bytes:
     """RGBA map: brown below zero, pale near zero, greener as NDVI rises."""
     stops = np.array([-1.0, 0.0, 0.3, 0.6, 1.0])
@@ -238,6 +287,14 @@ def fetch_satellite(area: AnalysisArea, *, now: datetime | None = None) -> Satel
             valid_percent = valid_count / ndvi.size * 100
             good_quality = valid_percent >= MIN_VALID_PIXEL_PERCENT
             acquired = datetime.fromisoformat(item["properties"]["datetime"].replace("Z", "+00:00"))
+            savi = _savi(
+                red.pixels, nir, scl,
+                _reflectance_scale_offset(item["assets"]["red"]),
+                _reflectance_scale_offset(item["assets"]["nir"]),
+            ) if good_quality else None
+            canopy_zones = compute_canopy_zones(ndvi) if good_quality else None
+            mean_savi = float(np.ma.mean(savi)) if (good_quality and savi is not None and np.ma.count(savi) > 0) else None
+
             result = SatelliteResult(
                 area=area,
                 scene_id=item["id"],
@@ -255,6 +312,8 @@ def fetch_satellite(area: AnalysisArea, *, now: datetime | None = None) -> Satel
                     "Too few clear, valid pixels in this rectangle for a reliable NDVI summary.",
                 width=red.pixels.shape[1],
                 height=red.pixels.shape[0],
+                mean_savi=mean_savi,
+                canopy_zones=canopy_zones,
             )
             if good_quality:
                 return result

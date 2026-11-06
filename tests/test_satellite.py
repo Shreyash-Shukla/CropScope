@@ -8,7 +8,16 @@ import numpy as np
 from PIL import Image
 
 from location import validate_rectangle
-from satellite import BandWindow, NoSceneError, _ndvi, _preview_png, fetch_satellite, search_scenes
+from satellite import (
+    BandWindow,
+    NoSceneError,
+    _ndvi,
+    _preview_png,
+    _savi,
+    compute_canopy_zones,
+    fetch_satellite,
+    search_scenes,
+)
 
 
 class SatelliteTests(unittest.TestCase):
@@ -108,6 +117,25 @@ class SatelliteTests(unittest.TestCase):
         self.assertEqual(image.mode, "LA")
         self.assertEqual(image.getpixel((1, 0))[1], 0)
         self.assertEqual(image.getpixel((0, 0))[1], 255)
+
+
+    def test_savi_and_canopy_zones(self):
+        red = np.ma.array([[1000, 2000], [1500, 1000]])
+        nir = np.ma.array([[3000, 2500], [2500, 1100]])
+        scl = np.ma.array([[4, 4], [5, 5]])
+        scale = (0.0001, 0.0)
+
+        savi = _savi(red, nir, scl, scale, scale, l_factor=0.5)
+        self.assertEqual(savi.shape, (2, 2))
+        self.assertTrue(np.all(np.isfinite(savi.compressed())))
+
+        ndvi_mock = np.ma.array([0.75, 0.45, 0.25, 0.10, -0.20])
+        zones = compute_canopy_zones(ndvi_mock)
+        self.assertEqual(zones["Dense Canopy (>0.60)"], 20.0)
+        self.assertEqual(zones["Moderate Canopy (0.35-0.60)"], 20.0)
+        self.assertEqual(zones["Sparse / Emerging (0.20-0.35)"], 20.0)
+        self.assertEqual(zones["Bare Soil / Non-Vegetated (0.00-0.20)"], 20.0)
+        self.assertEqual(zones["Water / Negative Index (<0.00)"], 20.0)
 
 
 if __name__ == "__main__":

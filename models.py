@@ -69,3 +69,5 @@ class SatelliteResult:
     quality_message: str | None
     width: int
     height: int
+    mean_savi: float | None = None
+    canopy_zones: dict[str, float] | None = None

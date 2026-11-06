@@ -90,6 +90,8 @@ class CacheStore:
             "valid_pixel_percent": result.valid_pixel_percent,
             "quality_message": result.quality_message,
             "width": result.width, "height": result.height,
+            "mean_savi": result.mean_savi,
+            "canopy_zones": result.canopy_zones,
         })
 
     def load_satellite(self, area: AnalysisArea) -> SatelliteResult | None:
@@ -112,6 +114,8 @@ class CacheStore:
                 valid_pixel_percent=float(payload["valid_pixel_percent"]),
                 quality_message=payload["quality_message"],
                 width=int(payload["width"]), height=int(payload["height"]),
+                mean_savi=float(payload["mean_savi"]) if payload.get("mean_savi") is not None else None,
+                canopy_zones=payload.get("canopy_zones"),
             )
         except (KeyError, TypeError, ValueError):
             return None

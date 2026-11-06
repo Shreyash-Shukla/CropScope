@@ -192,7 +192,17 @@ def show_satellite(result: SatelliteResult) -> None:
         with right_ndvi:
             st.metric("Mean NDVI", f"{result.mean_ndvi:.3f}")
             st.metric("Median NDVI", f"{result.median_ndvi:.3f}")
-            st.caption("NDVI describes greenness in this analysis rectangle. It cannot identify a disease, prove crop type, or measure yield.")
+            if result.mean_savi is not None:
+                st.metric("Mean SAVI (Soil-Adjusted)", f"{result.mean_savi:.3f}", help="Soil-Adjusted Vegetation Index reduces bare-soil background distortion in sparse or emerging canopies.")
+            st.caption("NDVI & SAVI describe greenness in this analysis rectangle. They cannot identify a disease, prove crop type, or measure yield.")
+
+        if result.canopy_zones:
+            st.markdown("**Vegetation Canopy Distribution**")
+            zone_cols = st.columns(len(result.canopy_zones))
+            zone_icons = ["🟩", "🟨", "🟧", "🟫", "🟦"]
+            for col, (zone_name, pct), icon in zip(zone_cols, result.canopy_zones.items(), zone_icons):
+                short_label = zone_name.split("(")[0].strip()
+                col.metric(f"{icon} {short_label}", f"{pct:.1f}%")
     left, right = st.columns(2)
     with left:
         st.image(result.red_preview_png, caption="Red band (B04), contrast-enhanced preview", width="stretch")

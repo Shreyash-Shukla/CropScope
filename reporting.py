@@ -87,6 +87,12 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
                 f"- **Mean NDVI:** {sat_res.mean_ndvi:.3f}",
                 f"- **Median NDVI:** {sat_res.median_ndvi:.3f}",
             ])
+            if sat_res.mean_savi is not None:
+                lines.append(f"- **Mean SAVI (Soil-Adjusted):** {sat_res.mean_savi:.3f}")
+            if sat_res.canopy_zones:
+                lines.append("- **Canopy Distribution Zones:**")
+                for zone_name, pct in sat_res.canopy_zones.items():
+                    lines.append(f"  - {zone_name}: {pct:.1f}%")
         lines.append("")
     elif outcome.satellite.error:
         lines.extend([
@@ -201,6 +207,8 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
             "usable_pixel_percent": sat_res.valid_pixel_percent,
             "mean_ndvi": sat_res.mean_ndvi,
             "median_ndvi": sat_res.median_ndvi,
+            "mean_savi": sat_res.mean_savi,
+            "canopy_zones": sat_res.canopy_zones,
             "quality_message": sat_res.quality_message,
         }
 
