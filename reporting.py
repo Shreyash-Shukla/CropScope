@@ -229,3 +229,13 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
 
     return json.dumps(data, indent=2)
 
+
+def advisory_filename_base(outcome: AnalysisOutcome) -> str:
+    """Generate a sanitized, cross-platform filename base for advisory exports."""
+    import re
+    raw_crop = outcome.request.crop.lower() if outcome.request.crop else "field"
+    crop_slug = re.sub(r"[^\w\-]+", "_", raw_crop).strip("_") or "field"
+    center = outcome.request.area.center
+    return f"cropscope_advisory_{crop_slug}_{center[0]:.2f}_{center[1]:.2f}"
+
+

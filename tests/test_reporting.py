@@ -6,7 +6,7 @@ from analysis import AnalysisOutcome, SourceState
 from location import SAMPLE_AREA
 from models import AnalysisRequest, ForecastDay, SatelliteResult, WeatherResult
 from recommendations import Candidate, Evidence, Suggestion
-from reporting import generate_advisory_json, generate_advisory_markdown
+from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
 
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
@@ -78,6 +78,27 @@ class ReportingTests(unittest.TestCase):
         self.assertIn("operational_windows", data["weather"])
         self.assertEqual(data["satellite"]["scene_id"], "scene-karnal-123")
         self.assertEqual(len(data["suggestions"]), 1)
+
+    def test_advisory_filename_sanitization(self):
+        # Standard crop name
+        outcome = sample_outcome()
+        base = advisory_filename_base(outcome)
+        self.assertTrue(base.startswith("cropscope_advisory_wheat_"))
+        self.assertNotIn("/", base)
+        self.assertNotIn("\\", base)
+
+        # Crop name with slashes and special characters
+        req_special = AnalysisRequest(SAMPLE_AREA, "Wheat / Barley (Winter #1)", "Vegetative")
+        outcome_special = AnalysisOutcome(
+            req_special, outcome.weather, outcome.satellite, outcome.suggestions, outcome.suggestion_source
+        )
+        base_special = advisory_filename_base(outcome_special)
+        self.assertTrue(base_special.startswith("cropscope_advisory_wheat_barley_winter_1_"))
+        self.assertNotIn("/", base_special)
+        self.assertNotIn("\\", base_special)
+        self.assertNotIn("(", base_special)
+        self.assertNotIn(")", base_special)
+        self.assertNotIn("#", base_special)
 
 
 if __name__ == "__main__":

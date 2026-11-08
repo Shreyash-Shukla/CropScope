@@ -1,9 +1,11 @@
 """CropScope: selected-area weather and Sentinel-2 vegetation processing."""
 
+import re
+from pathlib import Path
+
 import folium
 import pandas as pd
 import streamlit as st
-from pathlib import Path
 from folium.plugins import Draw, Geocoder
 from streamlit_folium import st_folium
 
@@ -12,7 +14,7 @@ from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
 from location import LocationError, SAMPLE_AREA, SAMPLE_PRESETS, rectangle_from_geojson, validate_rectangle
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
-from reporting import generate_advisory_json, generate_advisory_markdown
+from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
 
 
 def add_map_layers(map_obj: folium.Map) -> None:
@@ -36,7 +38,7 @@ def add_map_layers(map_obj: folium.Map) -> None:
 
 def draw_area() -> tuple[AnalysisArea | None, str | None]:
     st.write("Zoom to your location, choose the rectangle tool at the top left, and drag across one field. Use the layer icon (top right) to switch between Day/Night/Satellite maps. Use the trash tool to clear before drawing another.")
-    map_view = folium.Map(location=[18, 0], zoom_start=2, control_scale=True)
+    map_view = folium.Map(location=[18, 0], zoom_start=2, control_scale=True, tiles=None)
     add_map_layers(map_view)
     Geocoder(collapsed=True).add_to(map_view)
     Draw(
@@ -72,11 +74,43 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
     st.write("Enter the rectangle edges in decimal degrees. West and east must stay on the same side of the 180° meridian.")
     first, second = st.columns(2)
     with first:
-        north = st.number_input("North latitude", min_value=-90.0, max_value=90.0, value=SAMPLE_AREA.north, format="%.6f", step=0.0001)
-        south = st.number_input("South latitude", min_value=-90.0, max_value=90.0, value=SAMPLE_AREA.south, format="%.6f", step=0.0001)
+        north = st.number_input(
+            "North latitude",
+            min_value=-90.0,
+            max_value=90.0,
+            value=SAMPLE_AREA.north,
+            format="%.6f",
+            step=0.0001,
+            key="coord_north",
+        )
+        south = st.number_input(
+            "South latitude",
+            min_value=-90.0,
+            max_value=90.0,
+            value=SAMPLE_AREA.south,
+            format="%.6f",
+            step=0.0001,
+            key="coord_south",
+        )
     with second:
-        east = st.number_input("East longitude", min_value=-180.0, max_value=180.0, value=SAMPLE_AREA.east, format="%.6f", step=0.0001)
-        west = st.number_input("West longitude", min_value=-180.0, max_value=180.0, value=SAMPLE_AREA.west, format="%.6f", step=0.0001)
+        west = st.number_input(
+            "West longitude",
+            min_value=-180.0,
+            max_value=180.0,
+            value=SAMPLE_AREA.west,
+            format="%.6f",
+            step=0.0001,
+            key="coord_west",
+        )
+        east = st.number_input(
+            "East longitude",
+            min_value=-180.0,
+            max_value=180.0,
+            value=SAMPLE_AREA.east,
+            format="%.6f",
+            step=0.0001,
+            key="coord_east",
+        )
     try:
         area = validate_rectangle(south, west, north, east)
     except LocationError as exc:
@@ -86,7 +120,7 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
 
 
 def preview_area(area: AnalysisArea) -> None:
-    preview = folium.Map(location=list(area.center), zoom_start=14, control_scale=True)
+    preview = folium.Map(location=list(area.center), zoom_start=14, control_scale=True, tiles=None)
     folium.Rectangle(
         bounds=[[area.south, area.west], [area.north, area.east]],
         color="#15803d",
@@ -95,7 +129,16 @@ def preview_area(area: AnalysisArea) -> None:
     ).add_to(preview)
     add_map_layers(preview)
     preview.fit_bounds([[area.south, area.west], [area.north, area.east]])
-    st_folium(preview, key="area_preview", height=320, use_container_width=True, returned_objects=[])
+    preview_key = f"area_preview_{area.south:.4f}_{area.west:.4f}_{area.north:.4f}_{area.east:.4f}"
+    st_folium(
+        preview,
+        key=preview_key,
+        height=320,
+        use_container_width=True,
+        center=list(area.center),
+        zoom=14,
+        returned_objects=[],
+    )
 
 
 def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
@@ -112,7 +155,7 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     with hdr_col:
         st.subheader("Seven-day forecast & water balance")
     with unit_col:
-        is_imperial = st.toggle("Imperial units (°F, in)", value=False)
+        is_imperial = st.toggle("Imperial units (°F, in)", value=False, key="is_imperial_units")
 
     temp_unit = "°F" if is_imperial else "°C"
     len_unit = "in" if is_imperial else "mm"
@@ -127,6 +170,7 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
             f"Ref ET₀ ({len_unit})": to_len(row.et0_mm),
             f"Net P − ET₀ ({len_unit})": to_len(row.net_balance_mm),
             "Fieldwork window": suitability_icons.get(row.suitability, row.suitability),
+            "Advisory note": row.reason,
         }
         for row in summary.days
     ]
@@ -141,15 +185,21 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     st.write(f"**Crop:** {request.crop}  |  **Growth stage:** {request.growth_stage}")
     st.caption("Crop and stage inform the checks below; they do not change this weather forecast.")
     a, b, c, d = st.columns(4)
+    highest_heat = max(result.days, key=lambda day: day.max_temp_c)
     a.metric("Forecast rain", f"{to_len(summary.total_rain_mm)} {len_unit}", help="Sum of forecast daily rain; not measured rainfall.")
-    b.metric("Highest daily max", f"{to_temp(max(day.max_temp_c for day in result.days))} {temp_unit}")
+    b.metric("Highest daily max", f"{to_temp(highest_heat.max_temp_c)} {temp_unit}", delta=f"{highest_heat.day.strftime('%a, %d %b')}", delta_color="off", help="Peak forecast maximum temperature this week.")
     c.metric("Reference ET₀ total", f"{to_len(summary.total_et0_mm)} {len_unit}", help="Reference evapotranspiration for a well-watered grass surface; not a crop irrigation prescription.")
+    status_short = (
+        "Surplus" if summary.net_balance_mm >= 15.0
+        else "Deficit" if summary.net_balance_mm <= -15.0
+        else "Near-neutral"
+    )
     d.metric(
         f"Net water balance ({len_unit})",
         f"{to_len(summary.net_balance_mm):+0.2f if is_imperial else summary.net_balance_mm:+0.1f} {len_unit}",
-        delta=summary.status_label,
+        delta=status_short,
         delta_color="normal" if summary.net_balance_mm >= 0 else "inverse",
-        help="Cumulative precipitation minus reference ET₀. Atmospheric indicator of drying vs wetting trend.",
+        help=f"Cumulative precipitation minus reference ET₀: {summary.status_label}. Atmospheric indicator of drying vs wetting trend.",
     )
 
     st.dataframe(frame, hide_index=True, width="stretch")
@@ -167,11 +217,16 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         st.line_chart(frame, x="Date", y=f"Max temp ({temp_unit})", y_label=temp_unit, height=260)
 
     windows = evaluate_operational_windows(result)
-    with st.expander("🚜 Field Operations Planner (7-day windows)", expanded=False):
+    with st.expander("🚜 Field Operations Planner (7-day operational windows)", expanded=False):
         op1, op2, op3 = st.columns(3)
         op1.metric("🚜 Machinery Access", f"{len(windows.machinery_accessible_days)} / 7 days", help="Low soil saturation risk; minimal chance of field rutting.")
         op2.metric("🚿 Spraying Window", f"{len(windows.spraying_favorable_days)} / 7 days", help="Low droplet volatilization (<32°C) and minimal rain wash-off (<2mm).")
         op3.metric("🔍 Ground Scouting", f"{len(windows.scouting_recommended_days)} / 7 days", help="Favorable conditions for crop walks and visual inspection.")
+        st.divider()
+        format_days = lambda days: ", ".join(d.strftime("%a %d %b") for d in days) if days else "No favorable window forecast this week"
+        st.markdown(f"**🚜 Machinery accessible days:** {format_days(windows.machinery_accessible_days)}")
+        st.markdown(f"**🚿 Spraying favorable days:** {format_days(windows.spraying_favorable_days)}")
+        st.markdown(f"**🔍 Recommended scouting days:** {format_days(windows.scouting_recommended_days)}")
 
     st.caption(
         f"Fetched {result.fetched_at_utc.strftime('%d %b %Y, %H:%M UTC')} from "
@@ -189,9 +244,9 @@ def show_satellite(result: SatelliteResult) -> None:
         f"Read {result.width} × {result.height} pixels per 10 m band within the selected rectangle · "
         f"Fetched {result.fetched_at_utc.strftime('%d %b %Y, %H:%M UTC')}"
     )
-    st.metric("Usable pixels in selected rectangle", f"{result.valid_pixel_percent:.1f}%")
     if result.quality_message:
         st.warning(result.quality_message)
+        st.metric("Usable pixels in selected rectangle", f"{result.valid_pixel_percent:.1f}%")
     else:
         left_ndvi, right_ndvi = st.columns([2, 1])
         with left_ndvi:
@@ -199,7 +254,7 @@ def show_satellite(result: SatelliteResult) -> None:
             st.markdown(
                 """
                 <div style="margin-top: 4px; margin-bottom: 8px;">
-                  <div style="display: flex; justify-content: space-between; font-size: 11px; color: #555;">
+                  <div style="display: flex; justify-content: space-between; font-size: 11px; opacity: 0.85; font-weight: 500;">
                     <span>−1.0 (Water)</span>
                     <span>0.0 (Soil)</span>
                     <span>+0.3 (Sparse)</span>
@@ -212,6 +267,7 @@ def show_satellite(result: SatelliteResult) -> None:
                 unsafe_allow_html=True,
             )
         with right_ndvi:
+            st.metric("Usable pixels in area", f"{result.valid_pixel_percent:.1f}%", help="Percentage of pixels in the analysis rectangle free from cloud, shadow, snow, or defective data.")
             st.metric("Mean NDVI", f"{result.mean_ndvi:.3f}")
             st.metric("Median NDVI", f"{result.median_ndvi:.3f}")
             if result.mean_savi is not None:
@@ -221,10 +277,15 @@ def show_satellite(result: SatelliteResult) -> None:
         if result.canopy_zones:
             st.markdown("**Vegetation Canopy Distribution**")
             zone_cols = st.columns(len(result.canopy_zones))
-            zone_icons = ["🟩", "🟨", "🟧", "🟫", "🟦"]
-            for col, (zone_name, pct), icon in zip(zone_cols, result.canopy_zones.items(), zone_icons):
-                short_label = zone_name.split("(")[0].strip()
-                col.metric(f"{icon} {short_label}", f"{pct:.1f}%")
+            zone_meta = [
+                ("Dense", "🟩", "Dense Canopy (NDVI > 0.60)"),
+                ("Moderate", "🟨", "Moderate Canopy (NDVI 0.35 - 0.60)"),
+                ("Sparse", "🟧", "Sparse / Emerging (NDVI 0.20 - 0.35)"),
+                ("Bare Soil", "🟫", "Bare Soil / Non-Vegetated (NDVI 0.00 - 0.20)"),
+                ("Water / Neg", "🟦", "Water / Negative Index (NDVI < 0.00)"),
+            ]
+            for col, (zone_name, pct), (short_name, icon, tooltip) in zip(zone_cols, result.canopy_zones.items(), zone_meta):
+                col.metric(f"{icon} {short_name}", f"{pct:.1f}%", help=tooltip)
     left, right = st.columns(2)
     with left:
         st.image(result.red_preview_png, caption="Red band (B04), contrast-enhanced preview", width="stretch")
@@ -273,9 +334,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
     st.subheader("Field advisory report export")
     st.caption("Download a complete, dated advisory report containing coordinates, crop stage, agro-climatic water balance, satellite vegetation metrics, and prioritized checks.")
     dl_left, dl_right = st.columns(2)
-    crop_slug = outcome.request.crop.lower().replace(" ", "_") if outcome.request.crop else "field"
-    center = outcome.request.area.center
-    filename_base = f"cropscope_advisory_{crop_slug}_{center[0]:.2f}_{center[1]:.2f}"
+    filename_base = advisory_filename_base(outcome)
     with dl_left:
         st.download_button(
             label="📥 Download Advisory Report (Markdown)",
@@ -336,22 +395,25 @@ else:
 
 first, second = st.columns(2)
 with first:
-    crop = st.text_input("Crop", placeholder="e.g. wheat", max_chars=60).strip()
+    crop = st.text_input("Crop", placeholder="e.g. wheat", max_chars=60, key="crop_input").strip()
 with second:
     growth_stage = st.selectbox(
         "Growth stage",
         ["Seedling", "Vegetative", "Flowering", "Fruit or grain filling", "Maturity", "Other or unknown"],
         index=None,
         placeholder="Select a stage",
+        key="growth_stage_select",
     )
 
 first_button, second_button = st.columns(2)
 with first_button:
-    analyze_live = st.button("Analyze / retry live", type="primary")
+    analyze_live = st.button("Analyze / retry live", type="primary", use_container_width=True)
 with second_button:
-    use_saved = st.button("Use saved result for this rectangle")
+    use_saved = st.button("Use saved result for this rectangle", use_container_width=True)
+
 current_request = AnalysisRequest(area, crop, growth_stage) if area and crop and growth_stage else None
-if st.session_state.get("analysis_request") != current_request:
+last_request = st.session_state.get("analysis_request")
+if last_request and area and last_request.area != area:
     st.session_state.pop("analysis_outcome", None)
     st.session_state.pop("analysis_request", None)
 
@@ -362,35 +424,39 @@ if analyze_live or use_saved:
         st.error("Enter a crop and select its growth stage before analyzing.")
     else:
         st.session_state.analysis_request = current_request
-        weather_slot, satellite_slot, suggestion_slot = st.empty(), st.empty(), st.empty()
         cache = CacheStore(Path(__file__).resolve().parent / "cache",
                            Path(__file__).resolve().parent / "sample_data")
-        with st.status("Loading saved area data…" if use_saved else "Fetching live area data…", expanded=True) as progress:
-            progress.write("Weather: loading saved result…" if use_saved else "Weather: requesting forecast…")
-            def on_weather(state: SourceState) -> None:
-                progress.write("Weather: saved result loaded." if state.cached else
-                               "Weather: ready." if state.result else "Weather: unavailable.")
-                with weather_slot.container():
-                    show_weather_state(state, current_request)
-                progress.write("Satellite: loading saved result…" if use_saved else
-                               "Satellite: searching scenes, reading bands, and processing NDVI…")
+        status_container = st.container()
+        weather_slot, satellite_slot, suggestion_slot = st.empty(), st.empty(), st.empty()
+        with status_container:
+            with st.status("Loading saved area data…" if use_saved else "Fetching live area data…", expanded=True) as progress:
+                progress.write("Weather: loading saved result…" if use_saved else "Weather: requesting forecast…")
+                def on_weather(state: SourceState) -> None:
+                    progress.write("Weather: saved result loaded." if state.cached else
+                                   "Weather: ready." if state.result else "Weather: unavailable.")
+                    with weather_slot.container():
+                        show_weather_state(state, current_request)
+                    progress.write("Satellite: loading saved result…" if use_saved else
+                                   "Satellite: searching scenes, reading bands, and processing NDVI…")
 
-            def on_satellite(state: SourceState) -> None:
-                progress.write("Satellite: saved result loaded." if state.cached else
-                               "Satellite: ready." if state.result else "Satellite: unavailable.")
-                with satellite_slot.container():
-                    show_satellite_state(state)
+                def on_satellite(state: SourceState) -> None:
+                    progress.write("Satellite: saved result loaded." if state.cached else
+                                   "Satellite: ready." if state.result else "Satellite: unavailable.")
+                    with satellite_slot.container():
+                        show_satellite_state(state)
 
-            outcome = run_analysis(current_request, cache, cached_only=use_saved,
-                                   on_weather=on_weather, on_satellite=on_satellite)
-            progress.write("Recommendations: validated AI ranking or rule-based fallback complete.")
-            progress.update(label="Analysis complete", state="complete")
+                outcome = run_analysis(current_request, cache, cached_only=use_saved,
+                                       on_weather=on_weather, on_satellite=on_satellite)
+                progress.write("Recommendations: validated AI ranking or rule-based fallback complete.")
+                progress.update(label="Analysis complete", state="complete")
         st.session_state.analysis_outcome = outcome
         with suggestion_slot.container():
             show_suggestions(outcome)
             show_export_section(outcome)
 elif st.session_state.get("analysis_outcome"):
     outcome = st.session_state.analysis_outcome
+    if current_request and (outcome.request.crop != current_request.crop or outcome.request.growth_stage != current_request.growth_stage):
+        st.info("ℹ️ Inputs have changed. Click 'Analyze / retry live' or 'Use saved result' to update your advisory.")
     show_weather_state(outcome.weather, outcome.request)
     show_satellite_state(outcome.satellite)
     show_suggestions(outcome)
