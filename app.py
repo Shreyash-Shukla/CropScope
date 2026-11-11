@@ -20,7 +20,14 @@ from agronomy import (
 )
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
-from location import LocationError, SAMPLE_AREA, SAMPLE_PRESETS, rectangle_from_geojson, validate_rectangle
+from location import (
+    LocationError,
+    SAMPLE_AREA,
+    SAMPLE_PRESETS,
+    generate_area_geojson_str,
+    rectangle_from_geojson,
+    validate_rectangle,
+)
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
 from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
 
@@ -369,24 +376,32 @@ def show_suggestions(outcome: AnalysisOutcome) -> None:
 
 def show_export_section(outcome: AnalysisOutcome) -> None:
     st.divider()
-    st.subheader("Field advisory report export")
-    st.caption("Download a complete, dated advisory report containing coordinates, crop stage, agro-climatic water balance, satellite vegetation metrics, and prioritized checks.")
-    dl_left, dl_right = st.columns(2)
+    st.subheader("Field advisory report & GIS boundary export")
+    st.caption("Download a complete, dated advisory report containing coordinates, crop stage, agro-climatic water balance, satellite vegetation metrics, prioritized checks, or the GIS field boundary.")
+    dl_left, dl_mid, dl_right = st.columns(3)
     filename_base = advisory_filename_base(outcome)
     with dl_left:
         st.download_button(
-            label="📥 Download Advisory Report (Markdown)",
+            label="📥 Advisory Report (Markdown)",
             data=generate_advisory_markdown(outcome),
             file_name=f"{filename_base}.md",
             mime="text/markdown",
             use_container_width=True,
         )
-    with dl_right:
+    with dl_mid:
         st.download_button(
-            label="📥 Download Raw Analysis (JSON)",
+            label="📥 Raw Analysis (JSON)",
             data=generate_advisory_json(outcome),
             file_name=f"{filename_base}.json",
             mime="application/json",
+            use_container_width=True,
+        )
+    with dl_right:
+        st.download_button(
+            label="📥 Field Boundary (GeoJSON)",
+            data=generate_area_geojson_str(outcome.request.area, f"{outcome.request.crop} Field Boundary"),
+            file_name=f"{filename_base}_boundary.geojson",
+            mime="application/geo+json",
             use_container_width=True,
         )
 
@@ -430,6 +445,22 @@ else:
         f"North {area.north:.6f}°, East {area.east:.6f}° "
         f"(centre {latitude:.5f}°, {longitude:.5f}°)."
     )
+    with st.expander("📍 Field Boundary Details & GIS Coordinates", expanded=False):
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.code(
+                f"Bounding Box: [West: {area.west:.6f}, South: {area.south:.6f}, East: {area.east:.6f}, North: {area.north:.6f}]\n"
+                f"Center: [{latitude:.6f}, {longitude:.6f}] | Size: {area.formatted_area()}",
+                language="yaml",
+            )
+        with c2:
+            st.download_button(
+                "📥 Download GeoJSON Boundary",
+                data=generate_area_geojson_str(area, "Field Boundary"),
+                file_name="crop_field_boundary.geojson",
+                mime="application/geo+json",
+                use_container_width=True,
+            )
 
 first, second = st.columns(2)
 with first:

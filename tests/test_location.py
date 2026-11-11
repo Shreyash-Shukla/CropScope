@@ -1,6 +1,15 @@
+import json
 import unittest
 
-from location import LocationError, SAMPLE_PRESETS, rectangle_from_geojson, validate_rectangle
+from location import (
+    LocationError,
+    SAMPLE_AREA,
+    SAMPLE_PRESETS,
+    area_to_geojson,
+    generate_area_geojson_str,
+    rectangle_from_geojson,
+    validate_rectangle,
+)
 
 
 class RectangleSelectionTests(unittest.TestCase):
@@ -51,6 +60,26 @@ class RectangleSelectionTests(unittest.TestCase):
         for name, preset in SAMPLE_PRESETS.items():
             validated = validate_rectangle(preset.south, preset.west, preset.north, preset.east)
             self.assertEqual(validated, preset)
+
+    def test_area_to_geojson_and_roundtrip(self):
+        feat = area_to_geojson(SAMPLE_AREA, "Test Field")
+        self.assertEqual(feat["type"], "Feature")
+        self.assertEqual(feat["geometry"]["type"], "Polygon")
+        self.assertEqual(feat["properties"]["name"], "Test Field")
+        self.assertIn("area_ha", feat["properties"])
+        self.assertIn("bounds", feat["properties"])
+
+        # Validate roundtrip back into rectangle_from_geojson
+        reconstructed = rectangle_from_geojson(feat)
+        self.assertAlmostEqual(reconstructed.south, SAMPLE_AREA.south, places=5)
+        self.assertAlmostEqual(reconstructed.west, SAMPLE_AREA.west, places=5)
+        self.assertAlmostEqual(reconstructed.north, SAMPLE_AREA.north, places=5)
+        self.assertAlmostEqual(reconstructed.east, SAMPLE_AREA.east, places=5)
+
+        # Validate string serialization
+        json_str = generate_area_geojson_str(SAMPLE_AREA)
+        loaded = json.loads(json_str)
+        self.assertEqual(loaded["type"], "Feature")
 
 
 if __name__ == "__main__":

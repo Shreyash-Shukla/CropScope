@@ -1,5 +1,6 @@
 """Validate drawn or typed field-analysis rectangles."""
 
+import json
 import math
 
 from models import AnalysisArea
@@ -67,3 +68,40 @@ def rectangle_from_geojson(drawing: dict) -> AnalysisArea:
     if set(corners) != expected:
         raise LocationError("The selected shape is not a rectangle. Clear it and use Draw rectangle.")
     return validate_rectangle(south, west, north, east)
+
+
+def area_to_geojson(area: AnalysisArea, name: str | None = None) -> dict:
+    """Export an AnalysisArea as standard RFC 7946 GeoJSON Feature."""
+    coordinates = [
+        [round(area.west, 6), round(area.south, 6)],
+        [round(area.east, 6), round(area.south, 6)],
+        [round(area.east, 6), round(area.north, 6)],
+        [round(area.west, 6), round(area.north, 6)],
+        [round(area.west, 6), round(area.south, 6)],
+    ]
+    return {
+        "type": "Feature",
+        "properties": {
+            "name": name or "CropScope Analysis Area",
+            "area_km2": round(area.area_km2, 4),
+            "area_ha": round(area.area_ha, 3),
+            "area_acres": round(area.area_acres, 3),
+            "center_latitude": round(area.center[0], 6),
+            "center_longitude": round(area.center[1], 6),
+            "bounds": {
+                "south": round(area.south, 6),
+                "west": round(area.west, 6),
+                "north": round(area.north, 6),
+                "east": round(area.east, 6),
+            },
+        },
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [coordinates],
+        },
+    }
+
+
+def generate_area_geojson_str(area: AnalysisArea, name: str | None = None) -> str:
+    """Serialize the GeoJSON feature representation as formatted JSON string."""
+    return json.dumps(area_to_geojson(area, name), indent=2)
