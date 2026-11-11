@@ -46,6 +46,8 @@ class ReportingTests(unittest.TestCase):
         self.assertIn("wheat", md)
         self.assertIn("Vegetative", md)
         self.assertIn("scene-karnal-123", md)
+        self.assertIn("ha", md)
+        self.assertIn("ac", md)
         self.assertIn("Check drainage", md)
         self.assertIn("Decision-Support Boundaries", md)
         self.assertIn("Net Atmospheric Water Balance", md)
@@ -72,6 +74,8 @@ class ReportingTests(unittest.TestCase):
 
         self.assertEqual(data["crop"], "wheat")
         self.assertEqual(data["growth_stage"], "Vegetative")
+        self.assertIn("area_ha", data["area"])
+        self.assertIn("area_acres", data["area"])
         self.assertIn("weather", data)
         self.assertIn("satellite", data)
         self.assertEqual(data["weather"]["favorable_days_count"], 1)

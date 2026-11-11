@@ -16,6 +16,11 @@ class RectangleSelectionTests(unittest.TestCase):
         self.assertAlmostEqual(area.center[0], 47.002)
         self.assertAlmostEqual(area.center[1], 2.002)
         self.assertAlmostEqual(area.area_km2, 0.135, delta=0.01)
+        self.assertAlmostEqual(area.area_ha, 13.5, delta=1.0)
+        self.assertAlmostEqual(area.area_acres, 33.3, delta=2.5)
+        self.assertIn("ha", area.formatted_area())
+        self.assertIn("ac", area.formatted_area())
+        self.assertIn("km²", area.formatted_area())
 
     def test_invalid_extents_and_sizes_are_rejected(self):
         invalid = [

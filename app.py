@@ -115,6 +115,7 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
         area = validate_rectangle(south, west, north, east)
     except LocationError as exc:
         return None, str(exc)
+    st.caption(f"Area extent: **{area.formatted_area()}**")
     preview_area(area)
     return area, None
 
@@ -178,7 +179,7 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     latitude, longitude = result.area.center
 
     st.caption(
-        f"Selected rectangle: {result.area.area_km2:.3f} km² · "
+        f"Selected rectangle: {result.area.formatted_area()} · "
         f"Weather grid queried near its centre ({latitude:.5f}°, {longitude:.5f}°) · "
         f"Dates in {result.timezone}"
     )
@@ -387,7 +388,7 @@ elif area is None:
 else:
     latitude, longitude = area.center
     st.success(
-        f"Selected area: {area.area_km2:.3f} km² · "
+        f"Selected area: {area.formatted_area()} · "
         f"South {area.south:.6f}°, West {area.west:.6f}°, "
         f"North {area.north:.6f}°, East {area.east:.6f}° "
         f"(centre {latitude:.5f}°, {longitude:.5f}°)."

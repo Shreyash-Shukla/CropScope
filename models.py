@@ -27,6 +27,20 @@ class AnalysisArea:
             * (sin(radians(self.north)) - sin(radians(self.south)))
         )
 
+    @property
+    def area_ha(self) -> float:
+        """Area in hectares (1 km² = 100 ha)."""
+        return self.area_km2 * 100.0
+
+    @property
+    def area_acres(self) -> float:
+        """Area in acres (1 ha ≈ 2.47105 ac)."""
+        return self.area_km2 * 247.10538
+
+    def formatted_area(self) -> str:
+        """User-friendly multi-unit representation: ha, acres, and km²."""
+        return f"{self.area_ha:.2f} ha ({self.area_acres:.2f} ac / {self.area_km2:.3f} km²)"
+
 
 @dataclass(frozen=True)
 class AnalysisRequest:
