@@ -74,6 +74,7 @@ class ReportingTests(unittest.TestCase):
 
         self.assertEqual(data["crop"], "wheat")
         self.assertEqual(data["growth_stage"], "Vegetative")
+        self.assertIn("growth_stage_guidance", data)
         self.assertIn("area_ha", data["area"])
         self.assertIn("area_acres", data["area"])
         self.assertIn("weather", data)

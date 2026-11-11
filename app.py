@@ -9,7 +9,13 @@ import streamlit as st
 from folium.plugins import Draw, Geocoder
 from streamlit_folium import st_folium
 
-from agronomy import compute_agro_climatic_summary, evaluate_operational_windows
+from agronomy import (
+    COMMON_CROPS,
+    GROWTH_STAGE_GUIDANCE,
+    compute_agro_climatic_summary,
+    evaluate_operational_windows,
+    get_growth_stage_guidance,
+)
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
 from location import LocationError, SAMPLE_AREA, SAMPLE_PRESETS, rectangle_from_geojson, validate_rectangle
@@ -396,15 +402,31 @@ else:
 
 first, second = st.columns(2)
 with first:
-    crop = st.text_input("Crop", placeholder="e.g. wheat", max_chars=60, key="crop_input").strip()
+    crop_options = ["Select a crop...", *COMMON_CROPS, "Custom / Other..."]
+    crop_selection = st.selectbox(
+        "Crop",
+        crop_options,
+        index=0,
+        key="crop_select",
+        help="Select a common crop or choose 'Custom / Other...' to type any crop name.",
+    )
+    if crop_selection == "Custom / Other...":
+        crop = st.text_input("Custom crop name", placeholder="e.g. sunflower, tomato", max_chars=60, key="custom_crop_input").strip()
+    elif crop_selection != "Select a crop...":
+        crop = crop_selection
+    else:
+        crop = ""
 with second:
     growth_stage = st.selectbox(
         "Growth stage",
-        ["Seedling", "Vegetative", "Flowering", "Fruit or grain filling", "Maturity", "Other or unknown"],
+        list(GROWTH_STAGE_GUIDANCE.keys()),
         index=None,
         placeholder="Select a stage",
         key="growth_stage_select",
+        help="Growth stage informs field checks, water sensitivity, and operational advisories.",
     )
+    if growth_stage:
+        st.caption(f"💡 *{get_growth_stage_guidance(growth_stage)}*")
 
 first_button, second_button = st.columns(2)
 with first_button:

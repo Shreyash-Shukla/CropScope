@@ -2,11 +2,14 @@ import unittest
 from datetime import date, timedelta
 
 from agronomy import (
+    COMMON_CROPS,
+    GROWTH_STAGE_GUIDANCE,
     AgroClimaticSummary,
     OperationalWindows,
     compute_agro_climatic_summary,
     evaluate_fieldwork_suitability,
     evaluate_operational_windows,
+    get_growth_stage_guidance,
 )
 from location import SAMPLE_AREA
 from models import ForecastDay, WeatherResult
@@ -84,6 +87,22 @@ class AgronomyTests(unittest.TestCase):
         self.assertEqual(len(windows.spraying_favorable_days), 1)
         self.assertEqual(len(windows.machinery_accessible_days), 3)
         self.assertEqual(len(windows.scouting_recommended_days), 3)
+
+    def test_common_crops_and_growth_stage_guidance(self):
+        self.assertIn("Wheat", COMMON_CROPS)
+        self.assertIn("Rice / Paddy", COMMON_CROPS)
+        self.assertIn("Corn / Maize", COMMON_CROPS)
+        self.assertGreaterEqual(len(COMMON_CROPS), 8)
+
+        self.assertIn("Seedling", GROWTH_STAGE_GUIDANCE)
+        self.assertIn("Vegetative", GROWTH_STAGE_GUIDANCE)
+        self.assertIn("Flowering", GROWTH_STAGE_GUIDANCE)
+        self.assertIn("Maturity", GROWTH_STAGE_GUIDANCE)
+
+        flowering_guide = get_growth_stage_guidance("Flowering")
+        self.assertIn("pollination", flowering_guide.lower())
+        self.assertEqual(get_growth_stage_guidance(None), "")
+        self.assertIn("General", get_growth_stage_guidance("UnknownCustomStage"))
 
 
 if __name__ == "__main__":

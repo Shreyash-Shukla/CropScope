@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timezone
 
-from agronomy import compute_agro_climatic_summary, evaluate_operational_windows
+from agronomy import compute_agro_climatic_summary, evaluate_operational_windows, get_growth_stage_guidance
 from analysis import AnalysisOutcome
 from models import SatelliteResult, WeatherResult
 
@@ -24,7 +24,7 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
         "## 1. Field & Crop Overview",
         "",
         f"- **Crop:** {req.crop}",
-        f"- **Growth Stage:** {req.growth_stage}",
+        f"- **Growth Stage:** {req.growth_stage} ({get_growth_stage_guidance(req.growth_stage)})",
         f"- **Analysis Area:** {area.formatted_area()}",
         f"- **Bounding Box:** South {area.south:.6f}°, West {area.west:.6f}°, North {area.north:.6f}°, East {area.east:.6f}°",
         f"- **Center Coordinates:** {lat_center:.5f}°, {lon_center:.5f}°",
@@ -159,6 +159,7 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
         "report_generated_utc": now_utc.isoformat(),
         "crop": outcome.request.crop,
         "growth_stage": outcome.request.growth_stage,
+        "growth_stage_guidance": get_growth_stage_guidance(outcome.request.growth_stage),
         "area": {
             "south": area.south,
             "west": area.west,

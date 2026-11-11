@@ -6,6 +6,35 @@ from datetime import date
 from models import ForecastDay, WeatherResult
 
 
+COMMON_CROPS: tuple[str, ...] = (
+    "Wheat",
+    "Rice / Paddy",
+    "Corn / Maize",
+    "Soybean",
+    "Cotton",
+    "Barley",
+    "Canola / Mustard",
+    "Sugarcane",
+    "Potato",
+)
+
+GROWTH_STAGE_GUIDANCE: dict[str, str] = {
+    "Seedling": "Early emergence & root establishment; vulnerable to soil crusting, flooding, and topsoil desiccation.",
+    "Vegetative": "Active foliage expansion & canopy closure; critical period for weed scouting and canopy uniformity monitoring.",
+    "Flowering": "Peak reproductive & pollination window; highly vulnerable to thermal stress (>35°C) and moisture deficits.",
+    "Fruit or grain filling": "Nutrient & carbohydrate translocation; water balance impacts final yield; plan harvest access windows.",
+    "Maturity": "Crop dry-down and ripening; track dry weather windows for machinery and harvesting operations.",
+    "Other or unknown": "General field scouting and crop observation.",
+}
+
+
+def get_growth_stage_guidance(stage: str | None) -> str:
+    """Return operational guidance for a selected growth stage."""
+    if not stage:
+        return ""
+    return GROWTH_STAGE_GUIDANCE.get(stage, "General field scouting and crop observation.")
+
+
 @dataclass(frozen=True)
 class WaterBalanceDay:
     day: date
