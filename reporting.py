@@ -3,7 +3,12 @@
 import json
 from datetime import datetime, timezone
 
-from agronomy import compute_agro_climatic_summary, evaluate_operational_windows, get_growth_stage_guidance
+from agronomy import (
+    compute_agro_climatic_summary,
+    evaluate_operational_windows,
+    get_growth_stage_guidance,
+    summarize_canopy_health,
+)
 from analysis import AnalysisOutcome
 from models import SatelliteResult, WeatherResult
 
@@ -102,6 +107,9 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
                 lines.append("- **Canopy Distribution Zones:**")
                 for zone_name, pct in sat_res.canopy_zones.items():
                     lines.append(f"  - {zone_name}: {pct:.1f}%")
+                canopy_summary = summarize_canopy_health(sat_res.canopy_zones)
+                if canopy_summary:
+                    lines.append(f"- **Canopy Summary:** {canopy_summary}")
         lines.append("")
     elif outcome.satellite.error:
         lines.extend([

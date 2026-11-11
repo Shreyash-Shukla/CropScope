@@ -10,6 +10,7 @@ from agronomy import (
     evaluate_fieldwork_suitability,
     evaluate_operational_windows,
     get_growth_stage_guidance,
+    summarize_canopy_health,
 )
 from location import SAMPLE_AREA
 from models import ForecastDay, WeatherResult
@@ -103,6 +104,31 @@ class AgronomyTests(unittest.TestCase):
         self.assertIn("pollination", flowering_guide.lower())
         self.assertEqual(get_growth_stage_guidance(None), "")
         self.assertIn("General", get_growth_stage_guidance("UnknownCustomStage"))
+
+    def test_summarize_canopy_health(self):
+        dense_zones = {
+            "Dense Canopy (>0.60)": 60.0,
+            "Moderate Canopy (0.35-0.60)": 25.0,
+            "Sparse / Emerging (0.20-0.35)": 10.0,
+            "Bare Soil / Non-Vegetated (0.00-0.20)": 5.0,
+            "Water / Negative Index (<0.00)": 0.0,
+        }
+        res_dense = summarize_canopy_health(dense_zones)
+        self.assertIn("High canopy density", res_dense)
+        self.assertIn("85.0%", res_dense)
+
+        bare_zones = {
+            "Dense Canopy (>0.60)": 0.0,
+            "Moderate Canopy (0.35-0.60)": 10.0,
+            "Sparse / Emerging (0.20-0.35)": 20.0,
+            "Bare Soil / Non-Vegetated (0.00-0.20)": 70.0,
+            "Water / Negative Index (<0.00)": 0.0,
+        }
+        res_bare = summarize_canopy_health(bare_zones)
+        self.assertIn("Low canopy cover", res_bare)
+
+        self.assertEqual(summarize_canopy_health(None), "")
+        self.assertEqual(summarize_canopy_health({}), "")
 
 
 if __name__ == "__main__":

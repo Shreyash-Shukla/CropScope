@@ -139,3 +139,23 @@ def evaluate_operational_windows(weather: WeatherResult) -> OperationalWindows:
     )
 
 
+def summarize_canopy_health(canopy_zones: dict[str, float] | None) -> str:
+    """Provide a user-friendly high-level takeaway of the canopy distribution."""
+    if not canopy_zones:
+        return ""
+    values = list(canopy_zones.values())
+    if len(values) < 5:
+        return ""
+    dense, moderate, sparse, bare, water = values[0], values[1], values[2], values[3], values[4]
+    active_veg = dense + moderate
+    if active_veg >= 70.0:
+        return f"🌿 High canopy density: {active_veg:.1f}% of the analysis area displays healthy, active vegetative cover."
+    if active_veg >= 40.0:
+        return f"🌱 Moderate canopy coverage: {active_veg:.1f}% active vegetation, with {sparse + bare:.1f}% sparse or exposed soil."
+    if bare + sparse >= 60.0:
+        return f"🍂 Low canopy cover: {bare + sparse:.1f}% of the area is bare soil or early sparse emergence."
+    if water >= 20.0:
+        return f"💧 Notable moisture / water presence: {water:.1f}% of area indicates standing water or high moisture."
+    return f"Canopy distribution: {active_veg:.1f}% active vegetative cover."
+
+

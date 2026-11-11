@@ -15,6 +15,7 @@ from agronomy import (
     compute_agro_climatic_summary,
     evaluate_operational_windows,
     get_growth_stage_guidance,
+    summarize_canopy_health,
 )
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
@@ -283,16 +284,34 @@ def show_satellite(result: SatelliteResult) -> None:
 
         if result.canopy_zones:
             st.markdown("**Vegetation Canopy Distribution**")
-            zone_cols = st.columns(len(result.canopy_zones))
             zone_meta = [
-                ("Dense", "🟩", "Dense Canopy (NDVI > 0.60)"),
-                ("Moderate", "🟨", "Moderate Canopy (NDVI 0.35 - 0.60)"),
-                ("Sparse", "🟧", "Sparse / Emerging (NDVI 0.20 - 0.35)"),
-                ("Bare Soil", "🟫", "Bare Soil / Non-Vegetated (NDVI 0.00 - 0.20)"),
-                ("Water / Neg", "🟦", "Water / Negative Index (NDVI < 0.00)"),
+                ("Dense", "🟩", "#15803d", "Dense Canopy (NDVI > 0.60)"),
+                ("Moderate", "🟨", "#84cc16", "Moderate Canopy (NDVI 0.35 - 0.60)"),
+                ("Sparse", "🟧", "#eab308", "Sparse / Emerging (NDVI 0.20 - 0.35)"),
+                ("Bare Soil", "🟫", "#a16207", "Bare Soil / Non-Vegetated (NDVI 0.00 - 0.20)"),
+                ("Water / Neg", "🟦", "#0284c7", "Water / Negative Index (NDVI < 0.00)"),
             ]
-            for col, (zone_name, pct), (short_name, icon, tooltip) in zip(zone_cols, result.canopy_zones.items(), zone_meta):
+            segments_html = []
+            for (zone_name, pct), (short_name, icon, color, tooltip) in zip(result.canopy_zones.items(), zone_meta):
+                if pct > 0:
+                    segments_html.append(
+                        f'<div style="width: {pct:.1f}%; background-color: {color}; height: 14px; '
+                        f'display: inline-block;" title="{short_name}: {pct:.1f}%"></div>'
+                    )
+            if segments_html:
+                st.markdown(
+                    f'<div style="width: 100%; display: flex; border-radius: 4px; overflow: hidden; margin-bottom: 8px; border: 1px solid rgba(128,128,128,0.2);">'
+                    f'{"".join(segments_html)}</div>',
+                    unsafe_allow_html=True,
+                )
+
+            zone_cols = st.columns(len(result.canopy_zones))
+            for col, (zone_name, pct), (short_name, icon, color, tooltip) in zip(zone_cols, result.canopy_zones.items(), zone_meta):
                 col.metric(f"{icon} {short_name}", f"{pct:.1f}%", help=tooltip)
+
+            summary_text = summarize_canopy_health(result.canopy_zones)
+            if summary_text:
+                st.caption(f"💡 {summary_text}")
     left, right = st.columns(2)
     with left:
         st.image(result.red_preview_png, caption="Red band (B04), contrast-enhanced preview", width="stretch")
