@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from agronomy import (
     compute_agro_climatic_summary,
     evaluate_operational_windows,
+    generate_weather_alerts,
     get_growth_stage_guidance,
     summarize_canopy_health,
 )
@@ -54,11 +55,16 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
             f"- **Favorable Fieldwork Days:** {summary.favorable_days_count} of {len(summary.days)} days",
         ])
         windows = evaluate_operational_windows(weather_res)
+        alerts = generate_weather_alerts(weather_res)
         lines.append(
             f"- **Field Operations Windows:** {len(windows.spraying_favorable_days)} spraying days, "
             f"{len(windows.machinery_accessible_days)} machinery access days, "
             f"{len(windows.scouting_recommended_days)} scouting days"
         )
+        if alerts:
+            lines.append("- **Operational Weather Alerts:**")
+            for alert in alerts:
+                lines.append(f"  - {alert.message}")
         lines.extend([
             "",
             "| Date | Rain (mm) | Max Temp (°C) | Ref ET₀ (mm) | Net (P − ET₀) | Fieldwork Window | Notes |",
@@ -195,6 +201,7 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
     if isinstance(weather_res, WeatherResult):
         summary = compute_agro_climatic_summary(weather_res)
         windows = evaluate_operational_windows(weather_res)
+        alerts = generate_weather_alerts(weather_res)
         data["weather"] = {
             "cached": outcome.weather.cached,
             "timezone": weather_res.timezone,
@@ -210,6 +217,14 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
                 "machinery_days": [d.isoformat() for d in windows.machinery_accessible_days],
                 "scouting_days": [d.isoformat() for d in windows.scouting_recommended_days],
             },
+            "alerts": [
+                {
+                    "level": a.level,
+                    "category": a.category,
+                    "message": a.message,
+                }
+                for a in alerts
+            ],
             "days": [
                 {
                     "date": d.day.isoformat(),

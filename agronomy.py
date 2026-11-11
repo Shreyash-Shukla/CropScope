@@ -159,3 +159,87 @@ def summarize_canopy_health(canopy_zones: dict[str, float] | None) -> str:
     return f"Canopy distribution: {active_veg:.1f}% active vegetative cover."
 
 
+@dataclass(frozen=True)
+class WeatherAlert:
+    level: str  # "danger", "warning", "info", "success"
+    category: str
+    message: str
+
+
+def generate_weather_alerts(weather: WeatherResult) -> tuple[WeatherAlert, ...]:
+    """Generate high-priority operational and risk alerts for farm management."""
+    if not weather.days:
+        return ()
+
+    alerts: list[WeatherAlert] = []
+    highest_rain = max(weather.days, key=lambda d: d.rain_mm)
+    highest_heat = max(weather.days, key=lambda d: d.max_temp_c)
+    summary = compute_agro_climatic_summary(weather)
+    windows = evaluate_operational_windows(weather)
+
+    # Precipitation alerts
+    if highest_rain.rain_mm >= 10.0:
+        alerts.append(WeatherAlert(
+            level="danger",
+            category="Rain",
+            message=f"🌧️ Heavy Rain Alert: {highest_rain.rain_mm:.1f} mm forecast on {highest_rain.day.strftime('%a, %d %b')}. High risk of soil runoff and restricted machinery access.",
+        ))
+    elif highest_rain.rain_mm >= 5.0:
+        alerts.append(WeatherAlert(
+            level="warning",
+            category="Rain",
+            message=f"🌦️ Moderate Rain Expected: {highest_rain.rain_mm:.1f} mm forecast on {highest_rain.day.strftime('%a, %d %b')}. May wash off contact chemical applications.",
+        ))
+
+    # Thermal alerts
+    if highest_heat.max_temp_c >= 38.0:
+        alerts.append(WeatherAlert(
+            level="danger",
+            category="Heat",
+            message=f"🔥 Extreme Heat Hazard: Peak {highest_heat.max_temp_c:.1f} °C on {highest_heat.day.strftime('%a, %d %b')}. Severe thermal stress risk; avoid midday spraying and machinery operation.",
+        ))
+    elif highest_heat.max_temp_c >= 35.0:
+        alerts.append(WeatherAlert(
+            level="warning",
+            category="Heat",
+            message=f"☀️ Elevated Temperature Warning: Peak {highest_heat.max_temp_c:.1f} °C on {highest_heat.day.strftime('%a, %d %b')}. High droplet volatilization risk.",
+        ))
+
+    # Water balance trends
+    if summary.net_balance_mm <= -20.0:
+        alerts.append(WeatherAlert(
+            level="warning",
+            category="Water Balance",
+            message=f"⚠️ Atmospheric Moisture Deficit: 7-day cumulative net balance is {summary.net_balance_mm:+.1f} mm. Drying trend indicates increased crop water demand.",
+        ))
+    elif summary.net_balance_mm >= 25.0:
+        alerts.append(WeatherAlert(
+            level="info",
+            category="Water Balance",
+            message=f"💧 Moisture Surplus: 7-day net accumulation of {summary.net_balance_mm:+.1f} mm. Subsoil recharging expected; verify drainage.",
+        ))
+
+    # Spray window alerts
+    if len(windows.spraying_favorable_days) >= 4:
+        alerts.append(WeatherAlert(
+            level="success",
+            category="Spraying",
+            message=f"✨ Favorable Spray Window: {len(windows.spraying_favorable_days)} days forecast with calm conditions and low rain wash-off risk.",
+        ))
+    elif len(windows.spraying_favorable_days) == 0:
+        alerts.append(WeatherAlert(
+            level="warning",
+            category="Spraying",
+            message="⚠️ Limited Spraying Window: Rain or high temperatures restrict chemical applications across the forecast week.",
+        ))
+
+    if not alerts:
+        alerts.append(WeatherAlert(
+            level="success",
+            category="General",
+            message="🟢 Stable Field Conditions: No severe rainfall or extreme thermal anomalies forecast for the upcoming 7 days.",
+        ))
+
+    return tuple(alerts)
+
+

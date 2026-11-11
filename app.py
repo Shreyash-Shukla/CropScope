@@ -14,6 +14,7 @@ from agronomy import (
     GROWTH_STAGE_GUIDANCE,
     compute_agro_climatic_summary,
     evaluate_operational_windows,
+    generate_weather_alerts,
     get_growth_stage_guidance,
     summarize_canopy_health,
 )
@@ -164,6 +165,17 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         st.subheader("Seven-day forecast & water balance")
     with unit_col:
         is_imperial = st.toggle("Imperial units (°F, in)", value=False, key="is_imperial_units")
+
+    alerts = generate_weather_alerts(result)
+    for alert in alerts:
+        if alert.level == "danger":
+            st.error(alert.message)
+        elif alert.level == "warning":
+            st.warning(alert.message)
+        elif alert.level == "success":
+            st.success(alert.message)
+        else:
+            st.info(alert.message)
 
     temp_unit = "°F" if is_imperial else "°C"
     len_unit = "in" if is_imperial else "mm"

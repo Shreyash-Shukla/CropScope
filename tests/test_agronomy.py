@@ -6,9 +6,11 @@ from agronomy import (
     GROWTH_STAGE_GUIDANCE,
     AgroClimaticSummary,
     OperationalWindows,
+    WeatherAlert,
     compute_agro_climatic_summary,
     evaluate_fieldwork_suitability,
     evaluate_operational_windows,
+    generate_weather_alerts,
     get_growth_stage_guidance,
     summarize_canopy_health,
 )
@@ -129,6 +131,39 @@ class AgronomyTests(unittest.TestCase):
 
         self.assertEqual(summarize_canopy_health(None), "")
         self.assertEqual(summarize_canopy_health({}), "")
+
+    def test_generate_weather_alerts(self):
+        # 1. Extreme heat + heavy rain + surplus
+        days_extreme = (
+            ForecastDay(date(2026, 11, 1), 15.0, 39.0, 3.0),
+            ForecastDay(date(2026, 11, 2), 12.0, 30.0, 3.0),
+            ForecastDay(date(2026, 11, 3), 5.0, 28.0, 3.0),
+            ForecastDay(date(2026, 11, 4), 0.0, 26.0, 3.0),
+            ForecastDay(date(2026, 11, 5), 0.0, 25.0, 3.0),
+            ForecastDay(date(2026, 11, 6), 0.0, 25.0, 3.0),
+            ForecastDay(date(2026, 11, 7), 0.0, 25.0, 3.0),
+        )
+        weather_extreme = WeatherResult(SAMPLE_AREA, days_extreme, "UTC", date(2026, 11, 1), "http://test")
+        alerts_extreme = generate_weather_alerts(weather_extreme)
+
+        categories = [a.category for a in alerts_extreme]
+        self.assertIn("Rain", categories)
+        self.assertIn("Heat", categories)
+        danger_alerts = [a for a in alerts_extreme if a.level == "danger"]
+        self.assertGreaterEqual(len(danger_alerts), 1)
+
+        # 2. Calm / stable weather with good spray window
+        days_calm = tuple(
+            ForecastDay(date(2026, 11, 1) + timedelta(days=i), 0.0, 24.0, 2.5)
+            for i in range(7)
+        )
+        weather_calm = WeatherResult(SAMPLE_AREA, days_calm, "UTC", date(2026, 11, 1), "http://test")
+        alerts_calm = generate_weather_alerts(weather_calm)
+        self.assertTrue(any(a.category == "Spraying" and a.level == "success" for a in alerts_calm))
+
+        # 3. Empty weather days
+        weather_empty = WeatherResult(SAMPLE_AREA, (), "UTC", date(2026, 11, 1), "http://test")
+        self.assertEqual(generate_weather_alerts(weather_empty), ())
 
 
 if __name__ == "__main__":
