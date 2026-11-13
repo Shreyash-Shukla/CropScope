@@ -24,7 +24,9 @@ from location import (
     LocationError,
     SAMPLE_AREA,
     SAMPLE_PRESETS,
+    area_from_coordinates,
     generate_area_geojson_str,
+    parse_coordinate_string,
     rectangle_from_geojson,
     validate_rectangle,
 )
@@ -86,53 +88,120 @@ def draw_area() -> tuple[AnalysisArea | None, str | None]:
 
 
 def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
-    st.write("Enter the rectangle edges in decimal degrees. West and east must stay on the same side of the 180° meridian.")
-    first, second = st.columns(2)
-    with first:
-        north = st.number_input(
-            "North latitude",
-            min_value=-90.0,
-            max_value=90.0,
-            value=SAMPLE_AREA.north,
-            format="%.6f",
-            step=0.0001,
-            key="coord_north",
+    st.write("Enter the latitude and longitude of your field or specify boundary edges.")
+    coord_entry_type = st.radio(
+        "Coordinate entry method",
+        ["Center Point (Latitude & Longitude)", "Four-Corner Boundary (N/S/W/E)"],
+        horizontal=True,
+        key="coord_entry_type",
+    )
+    if coord_entry_type == "Center Point (Latitude & Longitude)":
+        pasted = st.text_input(
+            "Paste coordinates (optional quick-fill)",
+            placeholder="e.g. 29.7495, 77.0502 or 48.25° N, 1.70° E",
+            help="Type or paste latitude and longitude in any standard format and press Enter to auto-fill.",
+            key="coord_paste_input",
         )
-        south = st.number_input(
-            "South latitude",
-            min_value=-90.0,
-            max_value=90.0,
-            value=SAMPLE_AREA.south,
-            format="%.6f",
-            step=0.0001,
-            key="coord_south",
-        )
-    with second:
-        west = st.number_input(
-            "West longitude",
-            min_value=-180.0,
-            max_value=180.0,
-            value=SAMPLE_AREA.west,
-            format="%.6f",
-            step=0.0001,
-            key="coord_west",
-        )
-        east = st.number_input(
-            "East longitude",
-            min_value=-180.0,
-            max_value=180.0,
-            value=SAMPLE_AREA.east,
-            format="%.6f",
-            step=0.0001,
-            key="coord_east",
-        )
-    try:
-        area = validate_rectangle(south, west, north, east)
-    except LocationError as exc:
-        return None, str(exc)
-    st.caption(f"Area extent: **{area.formatted_area()}**")
-    preview_area(area)
-    return area, None
+        default_lat, default_lon = SAMPLE_AREA.center
+        if pasted.strip():
+            try:
+                parsed_lat, parsed_lon = parse_coordinate_string(pasted)
+                default_lat, default_lon = parsed_lat, parsed_lon
+            except LocationError as exc:
+                st.caption(f":warning: {exc}")
+
+        c1, c2, c3 = st.columns([2, 2, 2])
+        with c1:
+            lat = st.number_input(
+                "Latitude",
+                min_value=-90.0,
+                max_value=90.0,
+                value=float(default_lat),
+                format="%.6f",
+                step=0.0001,
+                key="coord_center_lat",
+            )
+        with c2:
+            lon = st.number_input(
+                "Longitude",
+                min_value=-180.0,
+                max_value=180.0,
+                value=float(default_lon),
+                format="%.6f",
+                step=0.0001,
+                key="coord_center_lon",
+            )
+        with c3:
+            extent_choice = st.selectbox(
+                "Field extent (side)",
+                ["250 m (~6 ha)", "500 m (~25 ha)", "1.0 km (~100 ha)", "2.0 km (~400 ha)"],
+                index=1,
+                help="CropScope analyzes a square field window centered on your coordinates (0.01 - 9.0 km²).",
+                key="coord_extent_select",
+            )
+            side_km = {
+                "250 m (~6 ha)": 0.25,
+                "500 m (~25 ha)": 0.50,
+                "1.0 km (~100 ha)": 1.00,
+                "2.0 km (~400 ha)": 2.00,
+            }.get(extent_choice, 0.50)
+
+        try:
+            area = area_from_coordinates(lat, lon, side_km=side_km)
+        except LocationError as exc:
+            return None, str(exc)
+
+        st.caption(f"Area extent: **{area.formatted_area()}** (Center: {lat:.5f}°, {lon:.5f}°)")
+        preview_area(area)
+        return area, None
+    else:
+        st.write("Enter the rectangle edges in decimal degrees. West and east must stay on the same side of the 180° meridian.")
+        first, second = st.columns(2)
+        with first:
+            north = st.number_input(
+                "North latitude",
+                min_value=-90.0,
+                max_value=90.0,
+                value=SAMPLE_AREA.north,
+                format="%.6f",
+                step=0.0001,
+                key="coord_north",
+            )
+            south = st.number_input(
+                "South latitude",
+                min_value=-90.0,
+                max_value=90.0,
+                value=SAMPLE_AREA.south,
+                format="%.6f",
+                step=0.0001,
+                key="coord_south",
+            )
+        with second:
+            west = st.number_input(
+                "West longitude",
+                min_value=-180.0,
+                max_value=180.0,
+                value=SAMPLE_AREA.west,
+                format="%.6f",
+                step=0.0001,
+                key="coord_west",
+            )
+            east = st.number_input(
+                "East longitude",
+                min_value=-180.0,
+                max_value=180.0,
+                value=SAMPLE_AREA.east,
+                format="%.6f",
+                step=0.0001,
+                key="coord_east",
+            )
+        try:
+            area = validate_rectangle(south, west, north, east)
+        except LocationError as exc:
+            return None, str(exc)
+        st.caption(f"Area extent: **{area.formatted_area()}**")
+        preview_area(area)
+        return area, None
 
 
 def preview_area(area: AnalysisArea) -> None:

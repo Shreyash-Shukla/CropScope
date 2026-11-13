@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 
 from models import AnalysisArea
 
@@ -105,3 +106,84 @@ def area_to_geojson(area: AnalysisArea, name: str | None = None) -> dict:
 def generate_area_geojson_str(area: AnalysisArea, name: str | None = None) -> str:
     """Serialize the GeoJSON feature representation as formatted JSON string."""
     return json.dumps(area_to_geojson(area, name), indent=2)
+
+
+def area_from_coordinates(latitude: float, longitude: float, side_km: float = 0.5) -> AnalysisArea:
+    """Create an AnalysisArea square centered on (latitude, longitude) with side length in km.
+
+    Default 0.5 km creates an approximate 25 ha field square, suitable for agricultural analysis.
+    """
+    if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
+        raise LocationError("Latitude and longitude must be numeric.")
+    if not math.isfinite(latitude) or not math.isfinite(longitude):
+        raise LocationError("Latitude and longitude must be finite numbers.")
+    if not (-90.0 <= latitude <= 90.0):
+        raise LocationError(f"Latitude must be between -90 and 90 degrees (got {latitude}).")
+    if not (-180.0 <= longitude <= 180.0):
+        raise LocationError(f"Longitude must be between -180 and 180 degrees (got {longitude}).")
+    if not (0.1 <= side_km <= MAX_SIDE_KM):
+        raise LocationError(f"Field extent side must be between 0.1 km and {MAX_SIDE_KM} km.")
+
+    half_side = side_km / 2.0
+    delta_lat = half_side / 111.195
+    cos_lat = math.cos(math.radians(latitude))
+    delta_lon = half_side / (111.195 * max(cos_lat, 1e-4))
+
+    south = max(-90.0, latitude - delta_lat)
+    north = min(90.0, latitude + delta_lat)
+    west = longitude - delta_lon
+    east = longitude + delta_lon
+
+    if west < -180.0 or east > 180.0:
+        raise LocationError("Field rectangle crosses the 180° meridian, which is not supported; enter custom bounds.")
+
+    return validate_rectangle(south, west, north, east)
+
+
+def parse_coordinate_string(coord_str: str) -> tuple[float, float]:
+    """Parse common coordinate string formats like '29.748, 77.048', '29.748° N, 77.048° E', etc.
+
+    Returns (latitude, longitude) or raises LocationError.
+    """
+    if not coord_str or not coord_str.strip():
+        raise LocationError("Enter coordinate text, e.g. '29.749, 77.050'.")
+    cleaned = coord_str.strip()
+
+    # Pattern for lat/lon with optional hemisphere letters N/S/E/W and degree symbols
+    match = re.search(
+        r"^\s*([+-]?\d+(?:\.\d+)?)\s*°?\s*([NSns])?\s*[,;/ ]\s*([+-]?\d+(?:\.\d+)?)\s*°?\s*([EWew])?\s*$",
+        cleaned,
+    )
+    if match:
+        lat_val = float(match.group(1))
+        lat_dir = match.group(2)
+        lon_val = float(match.group(3))
+        lon_dir = match.group(4)
+        if lat_dir and lat_dir.upper() == "S":
+            lat_val = -abs(lat_val)
+        elif lat_dir and lat_dir.upper() == "N":
+            lat_val = abs(lat_val)
+        if lon_dir and lon_dir.upper() == "W":
+            lon_val = -abs(lon_val)
+        elif lon_dir and lon_dir.upper() == "E":
+            lon_val = abs(lon_val)
+        if not (-90.0 <= lat_val <= 90.0):
+            raise LocationError(f"Latitude {lat_val}° is out of bounds (-90° to 90°).")
+        if not (-180.0 <= lon_val <= 180.0):
+            raise LocationError(f"Longitude {lon_val}° is out of bounds (-180° to 180°).")
+        return (lat_val, lon_val)
+
+    # Standard comma or whitespace separated numbers
+    parts = re.split(r"[,;\s]+", cleaned)
+    if len(parts) == 2:
+        try:
+            lat_val, lon_val = float(parts[0]), float(parts[1])
+            if not (-90.0 <= lat_val <= 90.0):
+                raise LocationError(f"Latitude {lat_val}° is out of bounds (-90° to 90°).")
+            if not (-180.0 <= lon_val <= 180.0):
+                raise LocationError(f"Longitude {lon_val}° is out of bounds (-180° to 180°).")
+            return (lat_val, lon_val)
+        except ValueError:
+            pass
+
+    raise LocationError("Could not recognize coordinates. Examples: '29.7495, 77.0502' or '48.25 N, 1.70 E'.")

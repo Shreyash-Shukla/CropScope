@@ -5,8 +5,10 @@ from location import (
     LocationError,
     SAMPLE_AREA,
     SAMPLE_PRESETS,
+    area_from_coordinates,
     area_to_geojson,
     generate_area_geojson_str,
+    parse_coordinate_string,
     rectangle_from_geojson,
     validate_rectangle,
 )
@@ -80,6 +82,47 @@ class RectangleSelectionTests(unittest.TestCase):
         json_str = generate_area_geojson_str(SAMPLE_AREA)
         loaded = json.loads(json_str)
         self.assertEqual(loaded["type"], "Feature")
+
+    def test_area_from_coordinates_creates_valid_rectangle(self):
+        area = area_from_coordinates(29.750, 77.050, side_km=0.5)
+        self.assertAlmostEqual(area.center[0], 29.750, places=3)
+        self.assertAlmostEqual(area.center[1], 77.050, places=3)
+        self.assertGreaterEqual(area.area_km2, 0.20)
+        self.assertLessEqual(area.area_km2, 0.30)
+
+    def test_area_from_coordinates_invalid_inputs(self):
+        with self.assertRaises(LocationError):
+            area_from_coordinates(95.0, 77.0)  # Latitude out of bounds
+        with self.assertRaises(LocationError):
+            area_from_coordinates(29.0, 195.0)  # Longitude out of bounds
+        with self.assertRaises(LocationError):
+            area_from_coordinates(29.0, 77.0, side_km=10.0)  # Side too large
+
+    def test_parse_coordinate_string_formats(self):
+        # Standard decimal degrees
+        lat, lon = parse_coordinate_string("29.7495, 77.0502")
+        self.assertAlmostEqual(lat, 29.7495)
+        self.assertAlmostEqual(lon, 77.0502)
+
+        # Space separated
+        lat, lon = parse_coordinate_string("48.25 1.70")
+        self.assertAlmostEqual(lat, 48.25)
+        self.assertAlmostEqual(lon, 1.70)
+
+        # Cardinal directions with degree signs
+        lat, lon = parse_coordinate_string("34.45 S, 146.05 E")
+        self.assertAlmostEqual(lat, -34.45)
+        self.assertAlmostEqual(lon, 146.05)
+
+        lat, lon = parse_coordinate_string("48.25° N, 1.70° W")
+        self.assertAlmostEqual(lat, 48.25)
+        self.assertAlmostEqual(lon, -1.70)
+
+        # Invalid formats
+        with self.assertRaises(LocationError):
+            parse_coordinate_string("invalid coordinates")
+        with self.assertRaises(LocationError):
+            parse_coordinate_string("100.0, 50.0")
 
 
 if __name__ == "__main__":
