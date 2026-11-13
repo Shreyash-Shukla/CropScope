@@ -187,3 +187,33 @@ def parse_coordinate_string(coord_str: str) -> tuple[float, float]:
             pass
 
     raise LocationError("Could not recognize coordinates. Examples: '29.7495, 77.0502' or '48.25 N, 1.70 E'.")
+
+
+def get_ip_location(timeout: float = 3.0) -> tuple[float, float, str]:
+    """Detect approximate location from public IP geolocation.
+
+    Returns (latitude, longitude, display_name).
+    Raises LocationError if geolocation fails or is unreachable.
+    """
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    req = Request(
+        "http://ip-api.com/json/",
+        headers={"User-Agent": "CropScope/1.0 (Agricultural Remote Sensing)"},
+    )
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data.get("status") == "success":
+                lat = float(data["lat"])
+                lon = float(data["lon"])
+                city = data.get("city", "")
+                region = data.get("regionName", "")
+                country = data.get("country", "")
+                parts = [p for p in (city, region, country) if p]
+                label = ", ".join(parts) or "Current Network Location"
+                return lat, lon, label
+            raise LocationError("IP geolocation service did not return coordinates.")
+    except (URLError, HTTPError, TimeoutError, ValueError, KeyError) as exc:
+        raise LocationError(f"Could not automatically detect location: {exc}") from exc

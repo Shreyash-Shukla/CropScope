@@ -6,7 +6,7 @@ from pathlib import Path
 import folium
 import pandas as pd
 import streamlit as st
-from folium.plugins import Draw, Geocoder
+from folium.plugins import Draw, Geocoder, LocateControl
 from streamlit_folium import st_folium
 
 from agronomy import (
@@ -26,6 +26,7 @@ from location import (
     SAMPLE_PRESETS,
     area_from_coordinates,
     generate_area_geojson_str,
+    get_ip_location,
     parse_coordinate_string,
     rectangle_from_geojson,
     validate_rectangle,
@@ -54,10 +55,11 @@ def add_map_layers(map_obj: folium.Map) -> None:
 
 
 def draw_area() -> tuple[AnalysisArea | None, str | None]:
-    st.write("Zoom to your location, choose the rectangle tool at the top left, and drag across one field. Use the layer icon (top right) to switch between Day/Night/Satellite maps. Use the trash tool to clear before drawing another.")
+    st.write("Zoom to your location, choose the rectangle tool at the top left, and drag across one field. Use the layer icon (top right) to switch between Day/Night/Satellite maps. Use the crosshair icon to jump to your location. Use the trash tool to clear before drawing another.")
     map_view = folium.Map(location=[18, 0], zoom_start=2, control_scale=True, tiles=None)
     add_map_layers(map_view)
     Geocoder(collapsed=True).add_to(map_view)
+    LocateControl(auto_start=False, flyTo=True, keepCurrentZoomLevel=False).add_to(map_view)
     Draw(
         export=False,
         draw_options={"rectangle": True, "polyline": False, "polygon": False, "circle": False, "circlemarker": False, "marker": False},
@@ -202,6 +204,96 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
         st.caption(f"Area extent: **{area.formatted_area()}**")
         preview_area(area)
         return area, None
+
+
+def my_location_area() -> tuple[AnalysisArea | None, str | None]:
+    st.write("Automatically detect your current field location using device GPS or network geolocation.")
+
+    gps_lat_param = st.query_params.get("user_lat")
+    gps_lon_param = st.query_params.get("user_lon")
+    if gps_lat_param and gps_lon_param:
+        try:
+            st.session_state.my_location_coords = (float(gps_lat_param), float(gps_lon_param), "Device GPS Position")
+        except ValueError:
+            pass
+
+    col_btn1, col_btn2 = st.columns([1, 1])
+    with col_btn1:
+        if st.button("🌐 Detect Network Location", use_container_width=True, help="Fast zero-prompt geolocation via network IP"):
+            try:
+                lat, lon, label = get_ip_location()
+                st.session_state.my_location_coords = (lat, lon, label)
+            except LocationError as exc:
+                return None, str(exc)
+
+    with col_btn2:
+        st.components.v1.html(
+            """
+            <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+              <button onclick="requestGps()" style="
+                width: 100%;
+                background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 9px 16px;
+                font-family: system-ui, -apple-system, sans-serif;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              ">📍 Use Device GPS</button>
+            </div>
+            <script>
+              function requestGps() {
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(function(pos) {
+                    const url = new URL(window.parent.location.href);
+                    url.searchParams.set('user_lat', pos.coords.latitude.toFixed(6));
+                    url.searchParams.set('user_lon', pos.coords.longitude.toFixed(6));
+                    window.parent.location.href = url.href;
+                  }, function(err) {
+                    alert('GPS location error: ' + err.message);
+                  }, { enableHighAccuracy: true, timeout: 10000 });
+                } else {
+                  alert('Geolocation is not supported by your browser.');
+                }
+              }
+            </script>
+            """,
+            height=45,
+        )
+
+    coords_data = st.session_state.get("my_location_coords")
+    if not coords_data:
+        st.info("Click **'🌐 Detect Network Location'** or **'📍 Use Device GPS'** above to pinpoint your field.")
+        return None, None
+
+    lat, lon, label = coords_data
+    st.success(f"📍 Selected Location: **{label}** (`{lat:.5f}°, {lon:.5f}°`)")
+
+    extent_choice = st.selectbox(
+        "Field extent around your location",
+        ["250 m (~6 ha)", "500 m (~25 ha)", "1.0 km (~100 ha)", "2.0 km (~400 ha)"],
+        index=1,
+        help="Select the analysis window size surrounding your detected location.",
+        key="my_loc_extent_select",
+    )
+    side_km = {
+        "250 m (~6 ha)": 0.25,
+        "500 m (~25 ha)": 0.50,
+        "1.0 km (~100 ha)": 1.00,
+        "2.0 km (~400 ha)": 2.00,
+    }.get(extent_choice, 0.50)
+
+    try:
+        area = area_from_coordinates(lat, lon, side_km=side_km)
+    except LocationError as exc:
+        return None, str(exc)
+
+    st.caption(f"Area extent: **{area.formatted_area()}**")
+    preview_area(area)
+    return area, None
 
 
 def preview_area(area: AnalysisArea) -> None:
@@ -481,16 +573,18 @@ st.write("Select an agricultural area to see its forecast weather, a recent Sent
 
 mode = st.radio(
     "Choose the analysis area",
-    ["Draw on map", "Enter coordinates", "Use sample preset"],
+    ["Enter coordinates", "Use my location", "Draw on map", "Use sample preset"],
     horizontal=True,
 )
 if st.session_state.get("location_mode") != mode:
     st.session_state.location_mode = mode
     st.session_state.map_drawings = []
-if mode == "Draw on map":
-    area, location_error = draw_area()
-elif mode == "Enter coordinates":
+if mode == "Enter coordinates":
     area, location_error = coordinate_area()
+elif mode == "Use my location":
+    area, location_error = my_location_area()
+elif mode == "Draw on map":
+    area, location_error = draw_area()
 else:
     preset_name = st.selectbox(
         "Select sample farmland location",

@@ -1,6 +1,8 @@
 import json
 import unittest
 
+from unittest.mock import MagicMock, patch
+
 from location import (
     LocationError,
     SAMPLE_AREA,
@@ -8,6 +10,7 @@ from location import (
     area_from_coordinates,
     area_to_geojson,
     generate_area_geojson_str,
+    get_ip_location,
     parse_coordinate_string,
     rectangle_from_geojson,
     validate_rectangle,
@@ -123,6 +126,32 @@ class RectangleSelectionTests(unittest.TestCase):
             parse_coordinate_string("invalid coordinates")
         with self.assertRaises(LocationError):
             parse_coordinate_string("100.0, 50.0")
+
+    @patch("urllib.request.urlopen")
+    def test_get_ip_location_success(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "status": "success",
+            "lat": 28.6139,
+            "lon": 77.2090,
+            "city": "New Delhi",
+            "regionName": "Delhi",
+            "country": "India"
+        }).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        lat, lon, label = get_ip_location()
+        self.assertAlmostEqual(lat, 28.6139)
+        self.assertAlmostEqual(lon, 77.2090)
+        self.assertIn("New Delhi", label)
+
+    @patch("urllib.request.urlopen")
+    def test_get_ip_location_failure(self, mock_urlopen):
+        from urllib.error import URLError
+        mock_urlopen.side_effect = URLError("Network unreachable")
+        with self.assertRaises(LocationError):
+            get_ip_location()
 
 
 if __name__ == "__main__":
