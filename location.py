@@ -217,3 +217,48 @@ def get_ip_location(timeout: float = 3.0) -> tuple[float, float, str]:
             raise LocationError("IP geolocation service did not return coordinates.")
     except (URLError, HTTPError, TimeoutError, ValueError, KeyError) as exc:
         raise LocationError(f"Could not automatically detect location: {exc}") from exc
+
+
+def search_locations(query: str, count: int = 5, timeout: float = 4.0) -> list[dict]:
+    """Search global locations by name using Open-Meteo Geocoding API.
+
+    Returns a list of dictionaries with keys:
+    'name', 'latitude', 'longitude', 'admin1', 'country', 'label'.
+    """
+    if not query or not query.strip():
+        return []
+
+    from urllib.error import HTTPError, URLError
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+
+    params = {
+        "name": query.strip(),
+        "count": max(1, min(count, 10)),
+        "language": "en",
+        "format": "json",
+    }
+    url = f"https://geocoding-api.open-meteo.com/v1/search?{urlencode(params)}"
+    req = Request(url, headers={"User-Agent": "CropScope/1.0 (Agricultural Remote Sensing)"})
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            raw_results = data.get("results", [])
+            output = []
+            for item in raw_results:
+                name = item.get("name", "")
+                admin1 = item.get("admin1", "")
+                country = item.get("country", "")
+                parts = [p for p in (name, admin1, country) if p]
+                label = ", ".join(parts) or name
+                output.append({
+                    "name": name,
+                    "latitude": float(item["latitude"]),
+                    "longitude": float(item["longitude"]),
+                    "admin1": admin1,
+                    "country": country,
+                    "label": label,
+                })
+            return output
+    except (URLError, HTTPError, TimeoutError, ValueError, KeyError) as exc:
+        raise LocationError(f"Location search failed: {exc}") from exc

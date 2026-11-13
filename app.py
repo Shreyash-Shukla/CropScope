@@ -29,6 +29,7 @@ from location import (
     get_ip_location,
     parse_coordinate_string,
     rectangle_from_geojson,
+    search_locations,
     validate_rectangle,
 )
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
@@ -87,6 +88,68 @@ def draw_area() -> tuple[AnalysisArea | None, str | None]:
         return rectangle_from_geojson(drawings[0]), None
     except LocationError as exc:
         return None, str(exc)
+
+
+def search_location_area() -> tuple[AnalysisArea | None, str | None]:
+    st.write("Search any town, agricultural region, landmark, or farm address worldwide.")
+    col_search, col_extent = st.columns([3, 1])
+    with col_search:
+        search_query = st.text_input(
+            "Search location",
+            placeholder="e.g. Karnal, Beauce, Salinas Valley, Wagga Wagga, Foggia...",
+            help="Type a place name, region, or city and press Enter.",
+            key="location_search_input",
+        )
+    with col_extent:
+        extent_choice = st.selectbox(
+            "Field extent (side)",
+            ["250 m (~6 ha)", "500 m (~25 ha)", "1.0 km (~100 ha)", "2.0 km (~400 ha)"],
+            index=1,
+            help="Select the analysis square size centered on the search target.",
+            key="search_loc_extent_select",
+        )
+        side_km = {
+            "250 m (~6 ha)": 0.25,
+            "500 m (~25 ha)": 0.50,
+            "1.0 km (~100 ha)": 1.00,
+            "2.0 km (~400 ha)": 2.00,
+        }.get(extent_choice, 0.50)
+
+    if not search_query.strip():
+        st.info("Type a city, farm district, or landmark to search.")
+        return None, None
+
+    try:
+        results = search_locations(search_query)
+    except LocationError as exc:
+        return None, str(exc)
+
+    if not results:
+        return None, f"No locations found for '{search_query}'. Try a nearby town or broader region."
+
+    labels = [f"{r['label']} ({r['latitude']:.4f}°, {r['longitude']:.4f}°)" for r in results]
+    selected_idx = 0
+    if len(labels) > 1:
+        chosen_label = st.selectbox(
+            "Multiple matching places found — select your target:",
+            labels,
+            index=0,
+            key="search_match_select",
+        )
+        selected_idx = labels.index(chosen_label)
+
+    match = results[selected_idx]
+    lat, lon = match["latitude"], match["longitude"]
+    st.success(f"📍 Selected: **{match['label']}** (`{lat:.5f}°, {lon:.5f}°`)")
+
+    try:
+        area = area_from_coordinates(lat, lon, side_km=side_km)
+    except LocationError as exc:
+        return None, str(exc)
+
+    st.caption(f"Area extent: **{area.formatted_area()}**")
+    preview_area(area)
+    return area, None
 
 
 def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
@@ -573,13 +636,15 @@ st.write("Select an agricultural area to see its forecast weather, a recent Sent
 
 mode = st.radio(
     "Choose the analysis area",
-    ["Enter coordinates", "Use my location", "Draw on map", "Use sample preset"],
+    ["Search location", "Enter coordinates", "Use my location", "Draw on map", "Use sample preset"],
     horizontal=True,
 )
 if st.session_state.get("location_mode") != mode:
     st.session_state.location_mode = mode
     st.session_state.map_drawings = []
-if mode == "Enter coordinates":
+if mode == "Search location":
+    area, location_error = search_location_area()
+elif mode == "Enter coordinates":
     area, location_error = coordinate_area()
 elif mode == "Use my location":
     area, location_error = my_location_area()

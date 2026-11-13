@@ -13,6 +13,7 @@ from location import (
     get_ip_location,
     parse_coordinate_string,
     rectangle_from_geojson,
+    search_locations,
     validate_rectangle,
 )
 
@@ -152,6 +153,33 @@ class RectangleSelectionTests(unittest.TestCase):
         mock_urlopen.side_effect = URLError("Network unreachable")
         with self.assertRaises(LocationError):
             get_ip_location()
+
+    @patch("urllib.request.urlopen")
+    def test_search_locations_success(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "results": [
+                {
+                    "name": "Karnal",
+                    "latitude": 29.69,
+                    "longitude": 76.98,
+                    "admin1": "Haryana",
+                    "country": "India"
+                }
+            ]
+        }).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        results = search_locations("Karnal")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "Karnal")
+        self.assertAlmostEqual(results[0]["latitude"], 29.69)
+        self.assertIn("Haryana", results[0]["label"])
+
+    def test_search_locations_empty_query(self):
+        self.assertEqual(search_locations(""), [])
+        self.assertEqual(search_locations("   "), [])
 
 
 if __name__ == "__main__":
