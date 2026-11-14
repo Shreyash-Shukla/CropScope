@@ -21,6 +21,11 @@ from agronomy import (
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
 from globe import build_globe_html, is_location_sunlit
+import location
+if not hasattr(location, "parse_boundary_string"):
+    import importlib
+    importlib.reload(location)
+
 from location import (
     LocationError,
     SAMPLE_AREA,
