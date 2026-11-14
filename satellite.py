@@ -160,6 +160,48 @@ def _read_aligned_band(href: str, reference: BandWindow) -> np.ma.MaskedArray:
                 return aligned.read(1, masked=True)
 
 
+def _read_true_color(href: str, reference: BandWindow) -> np.ma.MaskedArray:
+    """Read a 3-band (RGB) true-color COG window aligned with the reference band."""
+    height, width = reference.pixels.shape
+    with rasterio.Env(
+        GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", GDAL_HTTP_TIMEOUT="15",
+        GDAL_HTTP_MAX_RETRY="1", AWS_NO_SIGN_REQUEST="YES",
+    ):
+        with rasterio.open(href) as src:
+            if src.crs is None or src.count < 3:
+                raise SatelliteError("A scene visual layer has no usable coordinate system or 3-band pixels.")
+            with WarpedVRT(
+                src, crs=reference.crs, transform=reference.transform,
+                width=width, height=height, resampling=Resampling.nearest,
+            ) as aligned:
+                return aligned.read([1, 2, 3], masked=True)
+
+
+def _true_color_png(data: np.ma.MaskedArray) -> bytes:
+    """Encode (3, H, W) RGB masked array to RGBA PNG preserving true colors."""
+    if data.shape[0] != 3:
+        raise SatelliteError("Expected 3-band RGB data for true-color image.")
+    rgb = np.transpose(data.filled(0), (1, 2, 0)).astype(np.uint8)
+    if np.ma.is_masked(data):
+        alpha = (~np.ma.getmaskarray(data).any(axis=0)).astype(np.uint8) * 255
+    else:
+        alpha = np.full(rgb.shape[:2], 255, dtype=np.uint8)
+    rgba = np.dstack((rgb, alpha))
+    output = io.BytesIO()
+    Image.fromarray(rgba, mode="RGBA").save(output, format="PNG")
+    return output.getvalue()
+
+
+def _fetch_thumbnail(href: str) -> bytes | None:
+    """Safely fetch a quicklook/thumbnail image of the satellite scene."""
+    try:
+        req = Request(href, headers={"User-Agent": "CropScope/0.2 (satellite demo)"})
+        with urlopen(req, timeout=8) as resp:
+            return resp.read()
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+        return None
+
+
 def _ndvi(red: np.ma.MaskedArray, nir: np.ma.MaskedArray,
           scl: np.ma.MaskedArray, red_scale: tuple[float, float],
           nir_scale: tuple[float, float]) -> np.ma.MaskedArray:
@@ -304,6 +346,50 @@ def fetch_satellite(area: AnalysisArea, *, now: datetime | None = None) -> Satel
             canopy_zones = compute_canopy_zones(ndvi) if good_quality else None
             mean_savi = float(np.ma.mean(savi)) if (good_quality and savi is not None and np.ma.count(savi) > 0) else None
 
+            # Actual true-color RGB photograph (TCI)
+            true_color_png = None
+            visual_asset = item.get("assets", {}).get("visual")
+            if visual_asset and isinstance(visual_asset.get("href"), str):
+                try:
+                    visual_pixels = _read_true_color(visual_asset["href"], red)
+                    true_color_png = _true_color_png(visual_pixels)
+                except (SatelliteError, RasterioError, OSError, ValueError):
+                    true_color_png = None
+
+            # Pass overview quicklook / thumbnail
+            scene_thumbnail_url = None
+            scene_thumbnail_png = None
+            thumb_asset = item.get("assets", {}).get("thumbnail")
+            if thumb_asset and isinstance(thumb_asset.get("href"), str):
+                scene_thumbnail_url = thumb_asset["href"]
+                scene_thumbnail_png = _fetch_thumbnail(scene_thumbnail_url)
+
+            # Metadata attributes
+            props = item.get("properties", {})
+            platform_raw = props.get("platform")
+            platform = None
+            if isinstance(platform_raw, str):
+                import re
+                m = re.match(r"(?i)sentinel-?2([a-d])?", platform_raw.strip())
+                if m:
+                    letter = m.group(1).upper() if m.group(1) else ""
+                    platform = f"Sentinel-2{letter}"
+                else:
+                    platform = platform_raw.strip().title()
+            sun_elevation = None
+            if "view:sun_elevation" in props:
+                try:
+                    sun_elevation = float(props["view:sun_elevation"])
+                except (ValueError, TypeError):
+                    pass
+            sun_azimuth = None
+            if "view:sun_azimuth" in props:
+                try:
+                    sun_azimuth = float(props["view:sun_azimuth"])
+                except (ValueError, TypeError):
+                    pass
+            mgrs_tile = props.get("grid:code") or props.get("s2:tile_id")
+
             result = SatelliteResult(
                 area=area,
                 scene_id=item["id"],
@@ -323,6 +409,13 @@ def fetch_satellite(area: AnalysisArea, *, now: datetime | None = None) -> Satel
                 height=red.pixels.shape[0],
                 mean_savi=mean_savi,
                 canopy_zones=canopy_zones,
+                true_color_png=true_color_png,
+                scene_thumbnail_png=scene_thumbnail_png,
+                scene_thumbnail_url=scene_thumbnail_url,
+                platform=platform,
+                sun_elevation=sun_elevation,
+                sun_azimuth=sun_azimuth,
+                mgrs_tile=mgrs_tile,
             )
             if good_quality:
                 return result

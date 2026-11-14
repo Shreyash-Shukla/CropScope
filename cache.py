@@ -92,6 +92,13 @@ class CacheStore:
             "width": result.width, "height": result.height,
             "mean_savi": result.mean_savi,
             "canopy_zones": result.canopy_zones,
+            "true_color_png": encode(result.true_color_png),
+            "scene_thumbnail_png": encode(result.scene_thumbnail_png),
+            "scene_thumbnail_url": result.scene_thumbnail_url,
+            "platform": result.platform,
+            "sun_elevation": result.sun_elevation,
+            "sun_azimuth": result.sun_azimuth,
+            "mgrs_tile": result.mgrs_tile,
         })
 
     def load_satellite(self, area: AnalysisArea) -> SatelliteResult | None:
@@ -116,6 +123,13 @@ class CacheStore:
                 width=int(payload["width"]), height=int(payload["height"]),
                 mean_savi=float(payload["mean_savi"]) if payload.get("mean_savi") is not None else None,
                 canopy_zones=payload.get("canopy_zones"),
+                true_color_png=decode(payload.get("true_color_png")),
+                scene_thumbnail_png=decode(payload.get("scene_thumbnail_png")),
+                scene_thumbnail_url=payload.get("scene_thumbnail_url"),
+                platform=payload.get("platform"),
+                sun_elevation=float(payload["sun_elevation"]) if payload.get("sun_elevation") is not None else None,
+                sun_azimuth=float(payload["sun_azimuth"]) if payload.get("sun_azimuth") is not None else None,
+                mgrs_tile=payload.get("mgrs_tile"),
             )
         except (KeyError, TypeError, ValueError):
             return None

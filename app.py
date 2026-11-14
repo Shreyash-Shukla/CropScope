@@ -514,6 +514,16 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
 
 
 def show_satellite(result: SatelliteResult) -> None:
+    platform_label = getattr(result, "platform", None) or "Sentinel-2"
+    mgrs_tile = getattr(result, "mgrs_tile", None)
+    sun_elevation = getattr(result, "sun_elevation", None)
+    sun_azimuth = getattr(result, "sun_azimuth", None)
+    true_color_png = getattr(result, "true_color_png", None)
+    scene_thumbnail_png = getattr(result, "scene_thumbnail_png", None)
+    scene_thumbnail_url = getattr(result, "scene_thumbnail_url", None)
+    mean_savi = getattr(result, "mean_savi", None)
+    canopy_zones = getattr(result, "canopy_zones", None)
+
     st.markdown(
         f"""
         <div style="margin-top: 20px; margin-bottom: 18px; border-top: 1px solid var(--line); padding-top: 20px;">
@@ -521,10 +531,10 @@ def show_satellite(result: SatelliteResult) -> None:
             02 / SATELLITE PASS ACQUISITION
           </div>
           <div style="font-family: var(--font-sans); font-size: 28px; font-weight: 500; color: var(--bone); line-height: 1.05; letter-spacing: -0.02em;">
-            In the last 7 days, <span style="font-family: var(--font-serif); font-style: italic; color: var(--signal);">Sentinel-2 watched</span> this field.
+            In the last 7 days, <span style="font-family: var(--font-serif); font-style: italic; color: var(--signal);">{platform_label} watched</span> this field.
           </div>
           <div style="font-family: var(--font-mono); font-size: 11px; color: var(--bone-2); margin-top: 6px; letter-spacing: 0.04em;">
-            Scene <code>{result.scene_id}</code> · Acquired {result.acquired_at_utc.strftime('%Y-%m-%d %H:%M:%S UTC')} · Cloud cover: {result.scene_cloud_percent:.1f}% · 10m Ground Resolution
+            <span style="color: var(--signal); font-weight: 600;">◆ OPEN-OPTICAL</span> · Scene <code>{result.scene_id}</code> · Acquired {result.acquired_at_utc.strftime('%Y-%m-%d %H:%M:%S UTC')} · Cloud cover: {result.scene_cloud_percent:.1f}% · 10m Ground Resolution{f' · Tile {mgrs_tile}' if mgrs_tile else ''}{f' · Sun Elev: {sun_elevation:.1f}°' if sun_elevation is not None else ''}
           </div>
         </div>
         """,
@@ -533,34 +543,143 @@ def show_satellite(result: SatelliteResult) -> None:
     if result.quality_message:
         st.warning(result.quality_message)
         st.metric("Usable pixels in selected rectangle", f"{result.valid_pixel_percent:.1f}%")
-    else:
-        left_ndvi, right_ndvi = st.columns([2, 1])
-        with left_ndvi:
-            st.image(result.ndvi_png, caption="Cloud-masked NDVI · transparent = excluded", width="stretch")
+        if true_color_png:
             st.markdown(
                 """
-                <div style="margin-top: 4px; margin-bottom: 8px;">
-                  <div style="display: flex; justify-content: space-between; font-size: 11px; opacity: 0.85; font-weight: 500;">
-                    <span>−1.0 (Water)</span>
-                    <span>0.0 (Soil)</span>
-                    <span>+0.3 (Sparse)</span>
-                    <span>+0.6 (Moderate)</span>
-                    <span>+1.0 (Dense)</span>
-                  </div>
-                  <div style="height: 10px; width: 100%; border-radius: 4px; background: linear-gradient(to right, rgb(117,72,43), rgb(221,209,164) 50%, rgb(187,215,126) 65%, rgb(64,148,78) 80%, rgb(15,78,44) 100%);"></div>
+                <div style="font-family: var(--font-mono); font-size: 11px; color: var(--bone-2); margin-bottom: 8px;">
+                  <span style="color: var(--signal); font-weight: 600;">◆</span> ACTUAL OPTICAL PHOTO CAPTURED BY SENTINEL-2 (SHOWING CLOUD / HAZE OCCLUSION)
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
-        with right_ndvi:
-            st.metric("Usable pixels in area", f"{result.valid_pixel_percent:.1f}%", help="Percentage of pixels in the analysis rectangle free from cloud, shadow, snow, or defective data.")
-            st.metric("Mean NDVI", f"{result.mean_ndvi:.3f}")
-            st.metric("Median NDVI", f"{result.median_ndvi:.3f}")
-            if result.mean_savi is not None:
-                st.metric("Mean SAVI (Soil-Adjusted)", f"{result.mean_savi:.3f}", help="Soil-Adjusted Vegetation Index reduces bare-soil background distortion in sparse or emerging canopies.")
-            st.caption("NDVI & SAVI describe greenness in this analysis rectangle. They cannot identify a disease, prove crop type, or measure yield.")
+            st.image(true_color_png, caption="Actual Sentinel-2 Optical Photo (True Color TCI) · 10m Ground Resolution", width="stretch")
+            st.download_button(
+                "DOWNLOAD ACTUAL SATELLITE IMAGE (PNG)",
+                data=true_color_png,
+                file_name=f"sentinel2_{result.scene_id}_true_color.png",
+                mime="image/png",
+                use_container_width=True,
+            )
+    else:
+        # Side-by-side: Actual Satellite Photo alongside NDVI Spectral Health
+        if true_color_png is not None:
+            col_photo, col_ndvi = st.columns(2)
+            with col_photo:
+                st.markdown(
+                    f"""
+                    <div style="border: 1px solid var(--line-strong); background: var(--ink-1); padding: 10px 14px; margin-bottom: 10px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 10.5px; color: var(--bone-3); letter-spacing: 0.08em; text-transform: uppercase;">
+                        <div><span style="color: var(--signal); font-weight: 600;">◆</span> <strong>ACTUAL SATELLITE PHOTO</strong></div>
+                        <div style="color: var(--signal); font-weight: 600;">TRUE COLOR (TCI)</div>
+                      </div>
+                      <div style="font-family: var(--font-sans); font-size: 13px; color: var(--bone-2); margin-top: 4px;">
+                        The real natural-color photo captured by {platform_label}'s optical camera from orbit.
+                      </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.image(
+                    true_color_png,
+                    caption=f"Sentinel-2 True Color (TCI sRGB) · 10m Ground Resolution · {result.width}×{result.height} px",
+                    width="stretch",
+                )
+                st.download_button(
+                    "DOWNLOAD ACTUAL SATELLITE PHOTO (PNG)",
+                    data=true_color_png,
+                    file_name=f"sentinel2_{result.scene_id}_true_color.png",
+                    mime="image/png",
+                    use_container_width=True,
+                )
+                st.markdown(
+                    f"""
+                    <div style="font-family: var(--font-mono); font-size: 10px; line-height: 1.7; color: var(--bone-2); background: var(--ink-1); border: 1px solid var(--line); padding: 10px; margin-top: 8px;">
+                      <div><strong>Spacecraft:</strong> {platform_label} (ESA Copernicus)</div>
+                      <div><strong>Instrument:</strong> MSI (Multi-Spectral Instrument) · ~786 km Orbit</div>
+                      <div><strong>Resolution:</strong> 10.0 m / pixel ({result.width * 10}m × {result.height * 10}m field)</div>
+                      <div><strong>Bands:</strong> B04 Red (665nm) + B03 Green (560nm) + B02 Blue (490nm)</div>
+                      <div><strong>Sun Geometry:</strong> Elev {f"{sun_elevation:.1f}°" if sun_elevation is not None else "—"} · Azimuth {f"{sun_azimuth:.1f}°" if sun_azimuth is not None else "—"}</div>
+                      <div><strong>MGRS Grid:</strong> {mgrs_tile or "—"}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-        if result.canopy_zones:
+            with col_ndvi:
+                st.markdown(
+                    """
+                    <div style="border: 1px solid var(--line-strong); background: var(--ink-1); padding: 10px 14px; margin-bottom: 10px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 10.5px; color: var(--bone-3); letter-spacing: 0.08em; text-transform: uppercase;">
+                        <div><span style="color: #22c55e; font-weight: 600;">●</span> <strong>NDVI VEGETATION VIGOR</strong></div>
+                        <div style="color: #22c55e; font-weight: 600;">SPECTRAL HEALTH</div>
+                      </div>
+                      <div style="font-family: var(--font-sans); font-size: 13px; color: var(--bone-2); margin-top: 4px;">
+                        Cloud-masked canopy vitality computed from calibrated surface reflectance.
+                      </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.image(
+                    result.ndvi_png,
+                    caption="Cloud-masked NDVI · Brown = Soil/Water · Green = Active Canopy",
+                    width="stretch",
+                )
+                st.markdown(
+                    """
+                    <div style="margin-top: 4px; margin-bottom: 8px;">
+                      <div style="display: flex; justify-content: space-between; font-size: 10.5px; opacity: 0.85; font-weight: 500;">
+                        <span>−1.0 (Water)</span>
+                        <span>0.0 (Soil)</span>
+                        <span>+0.3 (Sparse)</span>
+                        <span>+0.6 (Moderate)</span>
+                        <span>+1.0 (Dense)</span>
+                      </div>
+                      <div style="height: 10px; width: 100%; border-radius: 4px; background: linear-gradient(to right, rgb(117,72,43), rgb(221,209,164) 50%, rgb(187,215,126) 65%, rgb(64,148,78) 80%, rgb(15,78,44) 100%);"></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                met_c1, met_c2 = st.columns(2)
+                with met_c1:
+                    st.metric("Usable pixels in area", f"{result.valid_pixel_percent:.1f}%", help="Percentage of pixels in the analysis rectangle free from cloud, shadow, snow, or defective data.")
+                    st.metric("Mean NDVI", f"{result.mean_ndvi:.3f}")
+                with met_c2:
+                    st.metric("Median NDVI", f"{result.median_ndvi:.3f}")
+                    if mean_savi is not None:
+                        st.metric("Mean SAVI (Soil-Adj)", f"{mean_savi:.3f}", help="Soil-Adjusted Vegetation Index reduces bare-soil background distortion in sparse or emerging canopies.")
+                st.caption("Cross-reference: Low NDVI spots can be checked against the optical photo to see if they are physical roads/ditches or genuine crop stress.")
+
+        else:
+            # Fallback if true_color_png is None (e.g. legacy cache)
+            left_ndvi, right_ndvi = st.columns([2, 1])
+            with left_ndvi:
+                st.image(result.ndvi_png, caption="Cloud-masked NDVI · transparent = excluded", width="stretch")
+                st.markdown(
+                    """
+                    <div style="margin-top: 4px; margin-bottom: 8px;">
+                      <div style="display: flex; justify-content: space-between; font-size: 11px; opacity: 0.85; font-weight: 500;">
+                        <span>−1.0 (Water)</span>
+                        <span>0.0 (Soil)</span>
+                        <span>+0.3 (Sparse)</span>
+                        <span>+0.6 (Moderate)</span>
+                        <span>+1.0 (Dense)</span>
+                      </div>
+                      <div style="height: 10px; width: 100%; border-radius: 4px; background: linear-gradient(to right, rgb(117,72,43), rgb(221,209,164) 50%, rgb(187,215,126) 65%, rgb(64,148,78) 80%, rgb(15,78,44) 100%);"></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with right_ndvi:
+                st.metric("Usable pixels in area", f"{result.valid_pixel_percent:.1f}%", help="Percentage of pixels in the analysis rectangle free from cloud, shadow, snow, or defective data.")
+                st.metric("Mean NDVI", f"{result.mean_ndvi:.3f}")
+                st.metric("Median NDVI", f"{result.median_ndvi:.3f}")
+                if mean_savi is not None:
+                    st.metric("Mean SAVI (Soil-Adjusted)", f"{mean_savi:.3f}", help="Soil-Adjusted Vegetation Index reduces bare-soil background distortion in sparse or emerging canopies.")
+                st.caption("NDVI & SAVI describe greenness in this analysis rectangle. They cannot identify a disease, prove crop type, or measure yield.")
+
+        # Always show vegetation canopy distribution and core metrics for complete agronomic analysis
+        if canopy_zones:
             st.markdown("**Vegetation Canopy Distribution**")
             zone_meta = [
                 ("Dense", "■", "#15803d", "Dense Canopy (NDVI > 0.60)"),
@@ -570,7 +689,7 @@ def show_satellite(result: SatelliteResult) -> None:
                 ("Water / Neg", "■", "#0284c7", "Water / Negative Index (NDVI < 0.00)"),
             ]
             segments_html = []
-            for (zone_name, pct), (short_name, icon, color, tooltip) in zip(result.canopy_zones.items(), zone_meta):
+            for (zone_name, pct), (short_name, icon, color, tooltip) in zip(canopy_zones.items(), zone_meta):
                 if pct > 0:
                     segments_html.append(
                         f'<div style="width: {pct:.1f}%; background-color: {color}; height: 14px; '
@@ -583,20 +702,38 @@ def show_satellite(result: SatelliteResult) -> None:
                     unsafe_allow_html=True,
                 )
 
-            zone_cols = st.columns(len(result.canopy_zones))
-            for col, (zone_name, pct), (short_name, icon, color, tooltip) in zip(zone_cols, result.canopy_zones.items(), zone_meta):
+            zone_cols = st.columns(len(canopy_zones))
+            for col, (zone_name, pct), (short_name, icon, color, tooltip) in zip(zone_cols, canopy_zones.items(), zone_meta):
                 col.metric(f"{icon} {short_name}", f"{pct:.1f}%", help=tooltip)
 
-            summary_text = summarize_canopy_health(result.canopy_zones)
+            summary_text = summarize_canopy_health(canopy_zones)
             if summary_text:
                 st.caption(f"💡 {summary_text}")
-    left, right = st.columns(2)
-    with left:
-        st.image(result.red_preview_png, caption="Red band (B04), contrast-enhanced preview", width="stretch")
-    with right:
-        st.image(result.nir_preview_png, caption="Near-infrared band (B08), contrast-enhanced preview", width="stretch")
+
+        # Regional Overflight Swath (~100km Context)
+        if scene_thumbnail_png or scene_thumbnail_url:
+            with st.expander("🛰️ REGIONAL OVERFLIGHT PASS SWATH (~100 KM × 100 KM CONTEXT)", expanded=False):
+                st.image(
+                    scene_thumbnail_png or scene_thumbnail_url,
+                    caption=f"Regional Sentinel-2 Overflight Swath · Scene {result.scene_id}",
+                    width="stretch",
+                )
+                st.caption(
+                    "This full-swath optical photograph captures the entire ~100 km × 100 km region as Sentinel-2 flew overhead at 7.4 km/s. "
+                    "Your selected field is located within this overflight scene, showing regional weather, terrain, and surrounding agricultural tracts."
+                )
+
+        # Always show the Red and NIR previews below for full spectral context
+        st.markdown("**Sensor Bands (Red B04 & Near-Infrared B08)**")
+        left, right = st.columns(2)
+        with left:
+            st.image(result.red_preview_png, caption="Red band (B04), contrast-enhanced preview", width="stretch")
+        with right:
+            st.image(result.nir_preview_png, caption="Near-infrared band (B08), contrast-enhanced preview", width="stretch")
+
     st.caption(
         "Source: [Element 84 Earth Search / Copernicus Sentinel-2 L2A](https://earth-search.aws.element84.com/v1). "
+        "True color image is the calibrated sRGB composite (B04-B03-B02, 10m GSD). "
         "Red and NIR previews use a contrast stretch for viewing only. NDVI uses STAC reflectance scale and offset, "
         "with scene-classification masking of clouds, shadows, snow, uncertain pixels, and no-data. "
         "Clear water pixels are included if present; draw tightly around one field."
@@ -843,6 +980,31 @@ st.markdown(
       /* Dataframes / Tables */
       div[data-testid="stDataFrame"] {
         border: 1px solid var(--line) !important;
+      }
+
+      /* Tabs: JPL instrument selector style */
+      div[data-baseweb="tab-list"] {
+        background-color: var(--ink-1) !important;
+        border-bottom: 1px solid var(--line) !important;
+        gap: 0px !important;
+        padding-top: 4px !important;
+      }
+      button[data-baseweb="tab"] {
+        font-family: var(--font-mono) !important;
+        font-size: 11px !important;
+        letter-spacing: 0.06em !important;
+        text-transform: uppercase !important;
+        color: var(--bone-3) !important;
+        padding: 8px 14px !important;
+        border-radius: 0px !important;
+        border-bottom: 2px solid transparent !important;
+        background: transparent !important;
+      }
+      button[data-baseweb="tab"][aria-selected="true"] {
+        color: var(--signal) !important;
+        border-bottom: 2px solid var(--signal) !important;
+        font-weight: 600 !important;
+        background: rgba(255, 106, 26, 0.08) !important;
       }
 
       /* Watched.earth Hero Section */

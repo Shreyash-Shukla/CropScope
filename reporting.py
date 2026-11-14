@@ -93,13 +93,28 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
     sat_res = outcome.satellite.result
     if isinstance(sat_res, SatelliteResult):
         sat_source = "Saved cache" if outcome.satellite.cached else "Live STAC Earth Search"
+        platform = getattr(sat_res, "platform", None)
+        sun_elevation = getattr(sat_res, "sun_elevation", None)
+        sun_azimuth = getattr(sat_res, "sun_azimuth", None)
+        mgrs_tile = getattr(sat_res, "mgrs_tile", None)
+        true_color_png = getattr(sat_res, "true_color_png", None)
+        mean_savi = getattr(sat_res, "mean_savi", None)
+        canopy_zones = getattr(sat_res, "canopy_zones", None)
+
+        platform_info = f" ({platform})" if platform else ""
         lines.extend([
-            f"- **Data Source:** {sat_source} ([Scene {sat_res.scene_id}]({sat_res.catalog_url}))",
+            f"- **Data Source:** {sat_source}{platform_info} ([Scene {sat_res.scene_id}]({sat_res.catalog_url}))",
             f"- **Acquisition Date:** {sat_res.acquired_at_utc.strftime('%Y-%m-%d %H:%M UTC')}",
             f"- **Scene Cloud Cover:** {sat_res.scene_cloud_percent:.1f}%",
             f"- **Usable Pixels in Rectangle:** {sat_res.valid_pixel_percent:.1f}%",
             f"- **Image Dimensions:** {sat_res.width} × {sat_res.height} pixels (10 m native band)",
         ])
+        if sun_elevation is not None and sun_azimuth is not None:
+            lines.append(f"- **Solar Angles:** Elevation {sun_elevation:.1f}° · Azimuth {sun_azimuth:.1f}°")
+        if mgrs_tile:
+            lines.append(f"- **MGRS Tile:** {mgrs_tile}")
+        if true_color_png is not None:
+            lines.append("- **Optical Imagery:** Actual Sentinel-2 True Color Image (TCI 10 m sRGB) available")
         if sat_res.quality_message:
             lines.append(f"- **Quality Notice:** {sat_res.quality_message}")
         else:
@@ -107,13 +122,13 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
                 f"- **Mean NDVI:** {sat_res.mean_ndvi:.3f}",
                 f"- **Median NDVI:** {sat_res.median_ndvi:.3f}",
             ])
-            if sat_res.mean_savi is not None:
-                lines.append(f"- **Mean SAVI (Soil-Adjusted):** {sat_res.mean_savi:.3f}")
-            if sat_res.canopy_zones:
+            if mean_savi is not None:
+                lines.append(f"- **Mean SAVI (Soil-Adjusted):** {mean_savi:.3f}")
+            if canopy_zones:
                 lines.append("- **Canopy Distribution Zones:**")
-                for zone_name, pct in sat_res.canopy_zones.items():
+                for zone_name, pct in canopy_zones.items():
                     lines.append(f"  - {zone_name}: {pct:.1f}%")
-                canopy_summary = summarize_canopy_health(sat_res.canopy_zones)
+                canopy_summary = summarize_canopy_health(canopy_zones)
                 if canopy_summary:
                     lines.append(f"- **Canopy Summary:** {canopy_summary}")
         lines.append("")
@@ -248,9 +263,14 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
             "usable_pixel_percent": sat_res.valid_pixel_percent,
             "mean_ndvi": sat_res.mean_ndvi,
             "median_ndvi": sat_res.median_ndvi,
-            "mean_savi": sat_res.mean_savi,
-            "canopy_zones": sat_res.canopy_zones,
+            "mean_savi": getattr(sat_res, "mean_savi", None),
+            "canopy_zones": getattr(sat_res, "canopy_zones", None),
             "quality_message": sat_res.quality_message,
+            "has_true_color_image": getattr(sat_res, "true_color_png", None) is not None,
+            "platform": getattr(sat_res, "platform", None),
+            "sun_elevation": getattr(sat_res, "sun_elevation", None),
+            "sun_azimuth": getattr(sat_res, "sun_azimuth", None),
+            "mgrs_tile": getattr(sat_res, "mgrs_tile", None),
         }
 
     return json.dumps(data, indent=2)

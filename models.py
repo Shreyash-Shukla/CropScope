@@ -85,3 +85,14 @@ class SatelliteResult:
     height: int
     mean_savi: float | None = None
     canopy_zones: dict[str, float] | None = None
+    true_color_png: bytes | None = None
+    scene_thumbnail_png: bytes | None = None
+    scene_thumbnail_url: str | None = None
+    platform: str | None = None
+    sun_elevation: float | None = None
+    sun_azimuth: float | None = None
+    mgrs_tile: str | None = None
+
+    def __getattr__(self, name: str):
+        # Gracefully return None for optional fields on legacy or unpickled instances
+        return None
