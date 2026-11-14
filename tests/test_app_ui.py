@@ -41,6 +41,12 @@ class AppUITests(unittest.TestCase):
         self.assertEqual(at.session_state["selected_language"], "en")
         lang_sel.select("हिन्दी (Hindi)").run()
         self.assertEqual(at.session_state["selected_language"], "hi")
+        # Verify UI labels updated to Hindi
+        from i18n import t
+        self.assertEqual(at.radio[0].label, t("choose_area_mode", "hi"))
+        self.assertEqual(at.selectbox(key="crop_select").label, t("crop_label", "hi"))
+        self.assertEqual(at.button[0].label, t("btn_analyze_live", "hi"))
+        self.assertEqual(at.button[1].label, t("btn_use_saved", "hi"))
 
     def test_kisan_mitra_chat_interaction(self):
         at = AppTest.from_file(APP_PATH, default_timeout=20)

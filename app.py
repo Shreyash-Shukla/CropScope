@@ -24,6 +24,9 @@ from chatbot import build_farmer_dossier, chat_with_kisan_mitra, get_dossier_sum
 from globe import build_globe_html, is_location_sunlit
 from i18n import (
     SUPPORTED_LANGUAGES,
+    format_crop_label,
+    format_mode_label,
+    format_stage_label,
     get_code_from_label,
     get_language_names,
     get_quick_prompts,
@@ -267,6 +270,7 @@ def render_search_autocomplete_script() -> None:
 
 
 def search_location_area() -> tuple[AnalysisArea | None, str | None]:
+    lang = st.session_state.get("selected_language", "en")
     st.write("Search any town, agricultural region, landmark, or farm address worldwide.")
     render_search_autocomplete_script()
 
@@ -285,7 +289,7 @@ def search_location_area() -> tuple[AnalysisArea | None, str | None]:
             st.session_state["location_search_input"] = preset_labels[pill]
 
     st.pills(
-        "Suggestions:",
+        t("search_pills_label", lang),
         list(preset_labels.keys()),
         key="search_preset_pill",
         on_change=_on_pill_change,
@@ -356,10 +360,12 @@ def search_location_area() -> tuple[AnalysisArea | None, str | None]:
 
 
 def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
+    lang = st.session_state.get("selected_language", "en")
     st.write("Enter the latitude and longitude of your field or specify boundary edges.")
     coord_entry_type = st.radio(
-        "Coordinate entry method",
+        t("coord_mode_label", lang),
         ["Center Point (Latitude & Longitude)", "Four-Corner Boundary (N/S/W/E)"],
+        format_func=lambda x: t(f"entry_{x}", lang),
         horizontal=True,
         key="coord_entry_type",
     )
@@ -638,6 +644,7 @@ def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> 
 
 
 def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
+    lang = st.session_state.get("selected_language", "en")
     summary = compute_agro_climatic_summary(result)
     suitability_icons = {
         "Favorable": "[FAVORABLE]",
@@ -650,12 +657,12 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     hdr_col, unit_col = st.columns([3, 1])
     with hdr_col:
         st.markdown(
-            """
+            f"""
             <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
-              03 / AGRO-CLIMATIC WATER BALANCE
+              {t("sec_weather_kicker", lang)}
             </div>
             <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.1; margin-bottom: 8px;">
-              Seven-day forecast & water balance
+              {t("sec_weather_title", lang)}
             </div>
             """,
             unsafe_allow_html=True,
@@ -703,9 +710,9 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     st.caption("Crop and stage inform the checks below; they do not change this weather forecast.")
     a, b, c, d = st.columns(4)
     highest_heat = max(result.days, key=lambda day: day.max_temp_c)
-    a.metric("Forecast rain", f"{to_len(summary.total_rain_mm)} {len_unit}", help="Sum of forecast daily rain; not measured rainfall.")
+    a.metric(t("metric_rain_total", lang), f"{to_len(summary.total_rain_mm)} {len_unit}", help="Sum of forecast daily rain; not measured rainfall.")
     b.metric("Highest daily max", f"{to_temp(highest_heat.max_temp_c)} {temp_unit}", delta=f"{highest_heat.day.strftime('%a, %d %b')}", delta_color="off", help="Peak forecast maximum temperature this week.")
-    c.metric("Reference ET₀ total", f"{to_len(summary.total_et0_mm)} {len_unit}", help="Reference evapotranspiration for a well-watered grass surface; not a crop irrigation prescription.")
+    c.metric(t("metric_et0_total", lang), f"{to_len(summary.total_et0_mm)} {len_unit}", help="Reference evapotranspiration for a well-watered grass surface; not a crop irrigation prescription.")
     status_short = (
         "Surplus" if summary.net_balance_mm >= 15.0
         else "Deficit" if summary.net_balance_mm <= -15.0
@@ -717,7 +724,7 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         else f"{summary.net_balance_mm:+0.1f}"
     )
     d.metric(
-        f"Net water balance ({len_unit})",
+        f"{t('metric_net_balance', lang)} ({len_unit})",
         f"{formatted_balance} {len_unit}",
         delta=status_short,
         delta_color="normal" if summary.net_balance_mm >= 0 else "inverse",
@@ -1003,14 +1010,15 @@ def show_satellite_state(state: SourceState) -> None:
 
 
 def show_suggestions(outcome: AnalysisOutcome) -> None:
+    lang = st.session_state.get("selected_language", "en")
     st.markdown(
-        """
+        f"""
         <div style="margin-top: 24px; margin-bottom: 14px; border-top: 1px solid var(--line); padding-top: 18px;">
           <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
-            04 / FIELD ACTION CHECKS
+            {t("sec_action_kicker", lang)}
           </div>
           <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.1;">
-            Prioritized agronomic checks
+            {t("sec_action_title", lang)}
           </div>
         </div>
         """,
@@ -1027,25 +1035,26 @@ def show_suggestions(outcome: AnalysisOutcome) -> None:
 
 
 def show_export_section(outcome: AnalysisOutcome) -> None:
+    lang = st.session_state.get("selected_language", "en")
     st.markdown(
-        """
+        f"""
         <div style="margin-top: 24px; margin-bottom: 14px; border-top: 1px solid var(--line); padding-top: 18px;">
           <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
-            05 / EXPORT & GIS BOUNDARY
+            {t("sec_export_kicker", lang)}
           </div>
           <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.1;">
-            Field advisory report & GIS boundary export
+            {t("sec_export_title", lang)}
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.caption("Download a complete, dated advisory report containing coordinates, crop stage, agro-climatic water balance, satellite vegetation metrics, prioritized checks, or the GIS field boundary.")
+    st.caption(t("export_caption", lang))
     dl_left, dl_mid, dl_right = st.columns(3)
     filename_base = advisory_filename_base(outcome)
     with dl_left:
         st.download_button(
-            label="Advisory Report (Markdown)",
+            label=t("dl_markdown", lang),
             data=generate_advisory_markdown(outcome),
             file_name=f"{filename_base}.md",
             mime="text/markdown",
@@ -1053,7 +1062,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
     with dl_mid:
         st.download_button(
-            label="Raw Analysis (JSON)",
+            label=t("dl_json", lang),
             data=generate_advisory_json(outcome),
             file_name=f"{filename_base}.json",
             mime="application/json",
@@ -1061,7 +1070,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
     with dl_right:
         st.download_button(
-            label="Field Boundary (GeoJSON)",
+            label=t("dl_geojson", lang),
             data=generate_area_geojson_str(outcome.request.area, f"{outcome.request.crop} Field Boundary"),
             file_name=f"{filename_base}_boundary.geojson",
             mime="application/geo+json",
@@ -1096,7 +1105,7 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
     with c_chat_info:
         st.caption(f"Language: **{SUPPORTED_LANGUAGES.get(lang, {}).get('label', 'English')}** · Grounded on live Sentinel-2 & Open-Meteo dossier")
     with c_chat_reset:
-        if st.button("🔄 Clear Chat", key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
+        if st.button(t("btn_clear_chat", lang), key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
             st.session_state.kisan_chat_messages = []
             st.rerun()
 
@@ -1431,17 +1440,6 @@ st.markdown(
 )
 
 hero_col, lang_col = st.columns([3, 1])
-with hero_col:
-    st.markdown(
-        """
-        <div class="hero-container" style="border-bottom: none; margin-bottom: 0px; padding-bottom: 0px;">
-          <div class="hero-kicker"><span class="hero-kicker-dot"></span> 01 / ORBITAL SENSING CONSOLE · SGP4 CELESTRAK</div>
-          <div class="hero-title">Something watched <span class="hero-serif">your crops</span> this week.</div>
-          <div class="hero-sub">Enter any field or farm location on Earth. See every Sentinel-2 multispectral pass, NDVI canopy health, and 7-day agro-climatic water balance.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 with lang_col:
     lang_labels = get_language_names()
     default_lang = st.session_state.get("selected_language", "en")
@@ -1457,13 +1455,32 @@ with lang_col:
         key="language_selector",
         help="Select language for Kisan Mitra AI field advisory and explanations.",
     )
-    st.session_state["selected_language"] = get_code_from_label(selected_label)
+    current_lang = get_code_from_label(selected_label)
+    st.session_state["selected_language"] = current_lang
+
+with hero_col:
+    kicker_txt = t("hero_kicker", current_lang)
+    prefix_txt = t("hero_title_prefix", current_lang)
+    crops_txt = t("hero_title_crops", current_lang)
+    suffix_txt = t("hero_title_suffix", current_lang)
+    sub_txt = t("hero_sub", current_lang)
+    st.markdown(
+        f"""
+        <div class="hero-container" style="border-bottom: none; margin-bottom: 0px; padding-bottom: 0px;">
+          <div class="hero-kicker"><span class="hero-kicker-dot"></span> {kicker_txt}</div>
+          <div class="hero-title">{prefix_txt}<span class="hero-serif">{crops_txt}</span>{suffix_txt}</div>
+          <div class="hero-sub">{sub_txt}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 st.markdown('<div style="border-bottom: 1px solid var(--line); margin-bottom: 24px;"></div>', unsafe_allow_html=True)
 
 mode = st.radio(
-    "Choose the analysis area",
+    t("choose_area_mode", current_lang),
     ["Search location", "Enter coordinates", "Use my location", "Draw on map", "Use sample preset"],
+    format_func=lambda m: format_mode_label(m, current_lang),
     horizontal=True,
 )
 if st.session_state.get("location_mode") != mode:
@@ -1521,10 +1538,11 @@ first, second = st.columns(2)
 with first:
     crop_options = ["Select a crop...", *COMMON_CROPS, "Custom / Other..."]
     crop_selection = st.selectbox(
-        "Crop",
+        t("crop_label", current_lang),
         crop_options,
         index=0,
         key="crop_select",
+        format_func=lambda c: format_crop_label(c, current_lang) if c in COMMON_CROPS else (t("select_crop_placeholder", current_lang) if c == "Select a crop..." else c),
         help="Select a common crop or choose 'Custom / Other...' to type any crop name.",
     )
     if crop_selection == "Custom / Other...":
@@ -1535,10 +1553,11 @@ with first:
         crop = ""
 with second:
     growth_stage = st.selectbox(
-        "Growth stage",
+        t("growth_stage_label", current_lang),
         list(GROWTH_STAGE_GUIDANCE.keys()),
         index=None,
-        placeholder="Select a stage",
+        placeholder=t("select_stage_placeholder", current_lang),
+        format_func=lambda s: format_stage_label(s, current_lang),
         key="growth_stage_select",
         help="Growth stage informs field checks, water sensitivity, and operational advisories.",
     )
@@ -1547,9 +1566,9 @@ with second:
 
 first_button, second_button = st.columns(2)
 with first_button:
-    analyze_live = st.button("ANALYZE SATELLITE PASSES →", type="primary", use_container_width=True)
+    analyze_live = st.button(t("btn_analyze_live", current_lang), type="primary", use_container_width=True)
 with second_button:
-    use_saved = st.button("USE SAVED ARCHIVE SCENE", use_container_width=True)
+    use_saved = st.button(t("btn_use_saved", current_lang), use_container_width=True)
 
 current_request = AnalysisRequest(area, crop, growth_stage) if area and crop and growth_stage else None
 last_request = st.session_state.get("analysis_request")

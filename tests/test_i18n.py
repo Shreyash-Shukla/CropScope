@@ -3,6 +3,9 @@ import unittest
 from i18n import (
     SUPPORTED_LANGUAGES,
     TRANSLATIONS,
+    format_crop_label,
+    format_mode_label,
+    format_stage_label,
     get_code_from_label,
     get_language_names,
     get_quick_prompts,
@@ -57,6 +60,28 @@ class I18nTests(unittest.TestCase):
         self.assertEqual(len(names), len(SUPPORTED_LANGUAGES))
         self.assertIn("English", names)
         self.assertIn("हिन्दी (Hindi)", names)
+
+    def test_format_helpers_and_ui_translations(self):
+        # Crop formatting
+        self.assertEqual(format_crop_label("Wheat", "en"), "Wheat")
+        self.assertIn("गेहूं", format_crop_label("Wheat", "hi"))
+        self.assertIn("ਕਣਕ", format_crop_label("Wheat", "pa"))
+        self.assertEqual(format_crop_label("UnknownCrop", "hi"), "UnknownCrop")
+
+        # Stage formatting
+        self.assertEqual(format_stage_label("Vegetative", "en"), "Vegetative")
+        self.assertIn("वानस्पतिक", format_stage_label("Vegetative", "hi"))
+        self.assertIn("ਵਧਣ-ਫੁੱਲਣ", format_stage_label("Vegetative", "pa"))
+
+        # Mode formatting
+        self.assertEqual(format_mode_label("Search location", "en"), "Search location")
+        self.assertIn("स्थान खोजें", format_mode_label("Search location", "hi"))
+        self.assertIn("ਥਾਂ ਖੋਜੋ", format_mode_label("Search location", "pa"))
+
+        # Action button translations
+        self.assertEqual(t("btn_analyze_live", "en"), "ANALYZE SATELLITE PASSES →")
+        self.assertIn("विश्लेषण", t("btn_analyze_live", "hi"))
+        self.assertIn("ਵਿਸ਼ਲੇਸ਼ਣ", t("btn_analyze_live", "pa"))
 
 
 if __name__ == "__main__":
