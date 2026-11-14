@@ -117,8 +117,9 @@ def search_location_area() -> tuple[AnalysisArea | None, str | None]:
         }.get(extent_choice, 0.50)
 
     if not search_query.strip():
-        st.info("Type a city, farm district, or landmark to search.")
-        return None, None
+        st.caption("Type any town, farm district, or landmark to retarget. Displaying default orbital preview:")
+        preview_area(SAMPLE_AREA, location_title="Karnal Farmland, Haryana (Preset)")
+        return SAMPLE_AREA, None
 
     try:
         results = search_locations(search_query)
@@ -296,16 +297,17 @@ def my_location_area() -> tuple[AnalysisArea | None, str | None]:
             <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
               <button onclick="requestGps()" style="
                 width: 100%;
-                background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-                color: white;
-                border: none;
-                border-radius: 8px;
+                background: #ff6a1a;
+                color: #07080a;
+                border: 1px solid rgba(236, 232, 224, 0.22);
+                border-radius: 0px;
                 padding: 9px 16px;
-                font-family: system-ui, -apple-system, sans-serif;
-                font-size: 14px;
+                font-family: 'Martian Mono', ui-monospace, monospace;
+                font-size: 11.5px;
                 font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
                 cursor: pointer;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
               ">📍 Use Device GPS</button>
             </div>
             <script>
@@ -331,6 +333,7 @@ def my_location_area() -> tuple[AnalysisArea | None, str | None]:
     coords_data = st.session_state.get("my_location_coords")
     if not coords_data:
         st.info("Click **'🌐 Detect Network Location'** or **'📍 Use Device GPS'** above to pinpoint your field.")
+        preview_area(SAMPLE_AREA, location_title="Global Orbital Console (Locate Field Above)")
         return None, None
 
     lat, lon, label = coords_data

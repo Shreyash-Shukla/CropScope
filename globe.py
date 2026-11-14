@@ -566,22 +566,25 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       return tex;
     }
 
-    const dayTexture = __DAY_TEXTURE_DATA_URL__
-      ? textureLoader.load('__DAY_TEXTURE_DATA_URL__')
+    const dayDataUrl = '__DAY_TEXTURE_DATA_URL__';
+    const dayTexture = dayDataUrl
+      ? textureLoader.load(dayDataUrl)
       : createFallbackTexture(true);
     dayTexture.encoding = THREE.sRGBEncoding;
     dayTexture.wrapS = THREE.ClampToEdgeWrapping;
     dayTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-    const nightTexture = __NIGHT_TEXTURE_DATA_URL__
-      ? textureLoader.load('__NIGHT_TEXTURE_DATA_URL__')
+    const nightDataUrl = '__NIGHT_TEXTURE_DATA_URL__';
+    const nightTexture = nightDataUrl
+      ? textureLoader.load(nightDataUrl)
       : createFallbackTexture(false);
     nightTexture.encoding = THREE.sRGBEncoding;
     nightTexture.wrapS = THREE.ClampToEdgeWrapping;
     nightTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-    const cloudsTexture = __CLOUDS_TEXTURE_DATA_URL__
-      ? textureLoader.load('__CLOUDS_TEXTURE_DATA_URL__')
+    const cloudsDataUrl = '__CLOUDS_TEXTURE_DATA_URL__';
+    const cloudsTexture = cloudsDataUrl
+      ? textureLoader.load(cloudsDataUrl)
       : createFallbackTexture(false);
     cloudsTexture.wrapS = THREE.RepeatWrapping;
     cloudsTexture.wrapT = THREE.ClampToEdgeWrapping;
