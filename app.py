@@ -163,19 +163,33 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
         key="coord_entry_type",
     )
     if coord_entry_type == "Center Point (Latitude & Longitude)":
+        if "coord_center_lat" not in st.session_state:
+            st.session_state["coord_center_lat"] = float(SAMPLE_AREA.center[0])
+        if "coord_center_lon" not in st.session_state:
+            st.session_state["coord_center_lon"] = float(SAMPLE_AREA.center[1])
+
+        def _sync_pasted_center() -> None:
+            raw = st.session_state.get("coord_paste_input", "").strip()
+            if raw:
+                try:
+                    parsed_lat, parsed_lon = parse_coordinate_string(raw)
+                    st.session_state["coord_center_lat"] = float(parsed_lat)
+                    st.session_state["coord_center_lon"] = float(parsed_lon)
+                    st.session_state["coord_paste_error"] = None
+                except LocationError as exc:
+                    st.session_state["coord_paste_error"] = str(exc)
+            else:
+                st.session_state["coord_paste_error"] = None
+
         pasted = st.text_input(
             "Paste coordinates (optional quick-fill)",
             placeholder="e.g. 29.7495, 77.0502 or 48.25° N, 1.70° E",
             help="Type or paste latitude and longitude in any standard format and press Enter to auto-fill.",
             key="coord_paste_input",
+            on_change=_sync_pasted_center,
         )
-        default_lat, default_lon = SAMPLE_AREA.center
-        if pasted.strip():
-            try:
-                parsed_lat, parsed_lon = parse_coordinate_string(pasted)
-                default_lat, default_lon = parsed_lat, parsed_lon
-            except LocationError as exc:
-                st.caption(f":warning: {exc}")
+        if st.session_state.get("coord_paste_error"):
+            st.caption(f":warning: {st.session_state['coord_paste_error']}")
 
         c1, c2, c3 = st.columns([2, 2, 2])
         with c1:
@@ -183,7 +197,6 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
                 "Latitude",
                 min_value=-90.0,
                 max_value=90.0,
-                value=float(default_lat),
                 format="%.6f",
                 step=0.0001,
                 key="coord_center_lat",
@@ -193,7 +206,6 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
                 "Longitude",
                 min_value=-180.0,
                 max_value=180.0,
-                value=float(default_lon),
                 format="%.6f",
                 step=0.0001,
                 key="coord_center_lon",
