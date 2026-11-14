@@ -467,19 +467,22 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     // Start camera at overview altitude
     camera.position.set(0, 0.5, 3.2);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.08;
     renderer.outputEncoding = THREE.sRGBEncoding;
     container.appendChild(renderer.domElement);
 
-    // ── 2. OrbitControls (Camera orbits around FIXED Earth) ──────────────────
+    // ── 2. OrbitControls (Smooth Direct Manipulation) ────────────────────────
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 1.30;
+    controls.dampingFactor = 0.08;
+    controls.rotateSpeed = 0.38;   // Smooth, non-twitchy rotation
+    controls.zoomSpeed = 0.52;     // Gentle, controlled zoom
+    controls.enablePan = false;    // Keep Earth permanently centered
+    controls.minDistance = 1.25;   // Allow closer inspection of terrain details
     controls.maxDistance = 5.2;
     controls.autoRotate = false; // Never fight the user with unprompted spin
 
@@ -566,6 +569,8 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       return tex;
     }
 
+    const maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 8;
+
     const dayDataUrl = '__DAY_TEXTURE_DATA_URL__';
     const dayTexture = dayDataUrl
       ? textureLoader.load(dayDataUrl)
@@ -573,6 +578,10 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     dayTexture.encoding = THREE.sRGBEncoding;
     dayTexture.wrapS = THREE.ClampToEdgeWrapping;
     dayTexture.wrapT = THREE.ClampToEdgeWrapping;
+    dayTexture.anisotropy = maxAniso;
+    dayTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    dayTexture.magFilter = THREE.LinearFilter;
+    dayTexture.generateMipmaps = true;
 
     const nightDataUrl = '__NIGHT_TEXTURE_DATA_URL__';
     const nightTexture = nightDataUrl
@@ -581,6 +590,10 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     nightTexture.encoding = THREE.sRGBEncoding;
     nightTexture.wrapS = THREE.ClampToEdgeWrapping;
     nightTexture.wrapT = THREE.ClampToEdgeWrapping;
+    nightTexture.anisotropy = maxAniso;
+    nightTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    nightTexture.magFilter = THREE.LinearFilter;
+    nightTexture.generateMipmaps = true;
 
     const cloudsDataUrl = '__CLOUDS_TEXTURE_DATA_URL__';
     const cloudsTexture = cloudsDataUrl
@@ -588,6 +601,10 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       : createFallbackTexture(false);
     cloudsTexture.wrapS = THREE.RepeatWrapping;
     cloudsTexture.wrapT = THREE.ClampToEdgeWrapping;
+    cloudsTexture.anisotropy = Math.min(maxAniso, 4);
+    cloudsTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    cloudsTexture.magFilter = THREE.LinearFilter;
+    cloudsTexture.generateMipmaps = true;
 
     // ── 5. Fixed Earth Mesh & Photoreal Shaders ──────────────────────────────
     const initialSun = sunDirectionWorld(Date.now());
@@ -639,13 +656,22 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
         vec3 dayTex = texture2D(uDay, vUv).rgb;
         float ocean = sat01((dayTex.b * 1.25 - dayTex.r * 1.05) * 2.2);
 
+        // Micro-topographic relief on land
+        vec2 dUv = vec2(1.0 / 4096.0, 1.0 / 2048.0);
+        float hC = luma(dayTex);
+        float hR = luma(texture2D(uDay, vUv + vec2(dUv.x, 0.0)).rgb);
+        float hT = luma(texture2D(uDay, vUv + vec2(0.0, dUv.y)).rgb);
+        vec3 bump = vec3((hR - hC) * 1.5, (hT - hC) * 1.5, 0.0) * (1.0 - ocean);
+        vec3 effN = normalize(N + bump * (1.0 - dayMix * 0.15));
+        float effNdL = dot(effN, L);
+
         vec3 albedo = pow(gradeDay(dayTex, ocean), vec3(1.12)) * 1.06;
-        float dayMix = smoothstep(-0.05, 0.09, NdL);
-        float lambert = sat01((NdL + 0.04) / 1.04);
+        float dayMix = smoothstep(-0.05, 0.09, effNdL);
+        float lambert = sat01((effNdL + 0.04) / 1.04);
         vec3 day = albedo * uSunIntensity * lambert;
 
         // Low sun reddening at twilight
-        float lowSun = gauss((NdL - 0.03) / 0.11);
+        float lowSun = gauss((effNdL - 0.03) / 0.11);
         day *= mix(vec3(1.0), vec3(1.0, 0.74, 0.55), lowSun * 0.45);
 
         // Ocean specular glint (Blinn-Phong)
@@ -681,6 +707,13 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
         float dusk = gauss((NdL + 0.035) / 0.05);
         col += uTwilightColor * dusk * 0.008;
 
+        // Subtle geographical navigation graticule (30° intervals)
+        float latGrid = abs(fract(vUv.y * 6.0) - 0.5);
+        float lonGrid = abs(fract(vUv.x * 12.0) - 0.5);
+        float gridLine = smoothstep(0.488, 0.496, max(latGrid, lonGrid));
+        float equator = smoothstep(0.003, 0.0, abs(vUv.y - 0.5));
+        col += vec3(0.18, 0.28, 0.38) * (gridLine * 0.10 + equator * 0.15);
+
         gl_FragColor = vec4(col, 1.0);
       }
     `;
@@ -702,7 +735,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       fragmentShader: earthFragmentShader
     });
     // SphereGeometry: 1.0 unit radius, Earth is FIXED in world space
-    const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 96, 48), earthMaterial);
+    const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 160, 80), earthMaterial);
     scene.add(earthMesh);
 
     // ── 6. Cloud Shell (radius 1.006) ───────────────────────────────────────
@@ -779,7 +812,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       transparent: true,
       depthWrite: false
     });
-    const cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(1.006, 96, 48), cloudMaterial);
+    const cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(1.006, 160, 80), cloudMaterial);
     scene.add(cloudMesh);
 
     // ── 7. Exponential Rayleigh Atmosphere Rim (radius 1.025) ───────────────
@@ -848,7 +881,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       transparent: true,
       depthWrite: false
     });
-    const atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(1.025, 64, 32), atmoMaterial);
+    const atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(1.025, 96, 48), atmoMaterial);
     scene.add(atmoMesh);
 
     // ── 8. Starfield ────────────────────────────────────────────────────────
@@ -952,11 +985,11 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     let flight = {
       active: false,
       startTime: 0,
-      duration: 1800,
+      duration: 2400,
       startDir: new THREE.Vector3(),
       startDist: 3.2,
       destDir: new THREE.Vector3(),
-      destDist: 2.2
+      destDist: 2.25
     };
 
     function easeInOutCubic(t) {
@@ -984,8 +1017,8 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     let arrivalTime = performance.now();
 
     function flyToTarget(distance, duration) {
-      distance = distance || 2.2;
-      duration = duration || 1900;
+      distance = distance || 2.25;
+      duration = duration || 2400;
 
       flight.active = true;
       flight.startTime = performance.now();
@@ -1146,7 +1179,9 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
 
         const curDir = new THREE.Vector3();
         slerpDir(flight.startDir, flight.destDir, t, curDir);
-        const curDist = flight.startDist + (flight.destDist - flight.startDist) * t;
+        // Altitude arc lifts the camera during flight so it feels like orbital travel
+        const arcLift = Math.sin(t * Math.PI) * 0.35;
+        const curDist = flight.startDist + (flight.destDist - flight.startDist) * t + arcLift;
 
         camera.position.copy(curDir).multiplyScalar(curDist);
         camera.up.set(0, 1, 0);
@@ -1198,9 +1233,9 @@ def build_globe_html(
     is_day, elevation = is_location_sunlit(center_lat, center_lon)
     solar_status = "DAYLIGHT" if is_day else "NIGHT SHADOW"
 
-    day_tex_url = _load_texture_data_url("earth-day-2k.webp")
-    night_tex_url = _load_texture_data_url("earth-night-2k.webp")
-    clouds_tex_url = _load_texture_data_url("earth-clouds-1k.webp")
+    day_tex_url = _load_texture_data_url("earth-day-4k.webp") or _load_texture_data_url("earth-day-2k.webp")
+    night_tex_url = _load_texture_data_url("earth-night-4k.webp") or _load_texture_data_url("earth-night-2k.webp")
+    clouds_tex_url = _load_texture_data_url("earth-clouds-2k.webp") or _load_texture_data_url("earth-clouds-1k.webp")
 
     html = _GLOBE_TEMPLATE
     html = html.replace("__HEIGHT__", str(height))

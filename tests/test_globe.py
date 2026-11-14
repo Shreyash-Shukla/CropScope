@@ -105,6 +105,18 @@ class GlobeAstronomicalTests(unittest.TestCase):
         self.assertTrue(clouds_url.startswith("data:image/webp;base64,"))
         self.assertGreater(len(clouds_url), 30000)
 
+        day_4k_url = _load_texture_data_url("earth-day-4k.webp")
+        self.assertTrue(day_4k_url.startswith("data:image/webp;base64,"))
+        self.assertGreater(len(day_4k_url), 100000)
+
+        night_4k_url = _load_texture_data_url("earth-night-4k.webp")
+        self.assertTrue(night_4k_url.startswith("data:image/webp;base64,"))
+        self.assertGreater(len(night_4k_url), 50000)
+
+        clouds_2k_url = _load_texture_data_url("earth-clouds-2k.webp")
+        self.assertTrue(clouds_2k_url.startswith("data:image/webp;base64,"))
+        self.assertGreater(len(clouds_2k_url), 50000)
+
     def test_build_globe_html_contains_critical_components(self):
         html = build_globe_html(29.748, 77.048, "Karnal Farm", height=500)
         self.assertIn("three.js", html.lower())
