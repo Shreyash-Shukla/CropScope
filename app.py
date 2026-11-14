@@ -92,14 +92,201 @@ def draw_area() -> tuple[AnalysisArea | None, str | None]:
         return None, str(exc)
 
 
+def render_search_autocomplete_script() -> None:
+    st.components.v1.html(
+        """
+        <script>
+        (function() {
+          const parentDoc = window.parent.document;
+          if (!parentDoc) return;
+
+          function initAutocomplete() {
+            const input = parentDoc.querySelector('input[aria-label="Search location"]') ||
+                          parentDoc.querySelector('input[placeholder*="Karnal"]');
+            if (!input || input.dataset.hasAutocomplete === "true") return;
+            input.dataset.hasAutocomplete = "true";
+
+            let dropdown = parentDoc.getElementById("cs-search-autocomplete");
+            if (!dropdown) {
+              dropdown = parentDoc.createElement("div");
+              dropdown.id = "cs-search-autocomplete";
+              dropdown.style.cssText = [
+                "position: absolute",
+                "z-index: 999999",
+                "background: #0e1117",
+                "border: 1px solid rgba(255, 106, 26, 0.4)",
+                "border-radius: 6px",
+                "box-shadow: 0 10px 28px rgba(0,0,0,0.65)",
+                "max-height: 280px",
+                "overflow-y: auto",
+                "display: none",
+                "font-family: ui-monospace, monospace, -apple-system, sans-serif",
+                "font-size: 12.5px",
+                "box-sizing: border-box"
+              ].join(";");
+              parentDoc.body.appendChild(dropdown);
+            }
+
+            let debounceTimer = null;
+            let abortController = null;
+            let activeIndex = -1;
+            let currentResults = [];
+
+            function positionDropdown() {
+              const rect = input.getBoundingClientRect();
+              dropdown.style.top = (rect.bottom + window.parent.scrollY + 4) + "px";
+              dropdown.style.left = (rect.left + window.parent.scrollX) + "px";
+              dropdown.style.width = rect.width + "px";
+            }
+
+            function renderResults(results) {
+              currentResults = results;
+              activeIndex = -1;
+              dropdown.innerHTML = "";
+              if (!results || results.length === 0) {
+                dropdown.style.display = "none";
+                return;
+              }
+              positionDropdown();
+              results.forEach((item, idx) => {
+                const row = parentDoc.createElement("div");
+                row.style.cssText = [
+                  "padding: 8px 12px",
+                  "cursor: pointer",
+                  "border-bottom: 1px solid rgba(255,255,255,0.06)",
+                  "display: flex",
+                  "justify-content: space-between",
+                  "align-items: center",
+                  "color: #e6edf3",
+                  "transition: background 0.15s ease"
+                ].join(";");
+                const left = parentDoc.createElement("div");
+                left.innerHTML = `<span style="font-weight: 600; color: #ff6a1a;">📍 ${item.name}</span> <span style="color: #8b949e; font-size: 11.5px;">${[item.admin1, item.country].filter(Boolean).join(", ")}</span>`;
+                const right = parentDoc.createElement("div");
+                right.style.cssText = "color: #7d8590; font-size: 11px; font-family: monospace; white-space: nowrap; margin-left: 8px;";
+                right.textContent = `${item.latitude.toFixed(2)}°, ${item.longitude.toFixed(2)}°`;
+                row.appendChild(left);
+                row.appendChild(right);
+
+                row.addEventListener("mouseenter", () => highlightIndex(idx));
+                row.addEventListener("mousedown", (e) => {
+                  e.preventDefault();
+                  selectItem(item);
+                });
+                dropdown.appendChild(row);
+              });
+              dropdown.style.display = "block";
+            }
+
+            function highlightIndex(idx) {
+              activeIndex = idx;
+              const rows = dropdown.children;
+              for (let i = 0; i < rows.length; i++) {
+                rows[i].style.background = i === activeIndex ? "rgba(255, 106, 26, 0.22)" : "transparent";
+              }
+            }
+
+            function selectItem(item) {
+              dropdown.style.display = "none";
+              const queryName = [item.name, item.admin1, item.country].filter(Boolean).join(", ");
+              const nativeSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
+              nativeSetter.call(input, queryName);
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+              input.dispatchEvent(new Event("change", { bubbles: true }));
+              input.dispatchEvent(new window.parent.KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
+            }
+
+            input.addEventListener("input", function() {
+              const q = input.value.trim();
+              clearTimeout(debounceTimer);
+              if (abortController) abortController.abort();
+              if (q.length < 2) {
+                dropdown.style.display = "none";
+                return;
+              }
+              debounceTimer = setTimeout(() => {
+                abortController = new AbortController();
+                fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=en&format=json`, { signal: abortController.signal })
+                  .then(res => res.json())
+                  .then(data => {
+                    renderResults(data.results || []);
+                  })
+                  .catch(err => {
+                    if (err.name !== 'AbortError') dropdown.style.display = "none";
+                  });
+              }, 200);
+            });
+
+            input.addEventListener("keydown", function(e) {
+              if (dropdown.style.display === "none") return;
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                highlightIndex(Math.min(activeIndex + 1, currentResults.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                highlightIndex(Math.max(activeIndex - 1, 0));
+              } else if (e.key === "Enter" && activeIndex >= 0) {
+                e.preventDefault();
+                selectItem(currentResults[activeIndex]);
+              } else if (e.key === "Escape") {
+                dropdown.style.display = "none";
+              }
+            });
+
+            parentDoc.addEventListener("click", function(e) {
+              if (!dropdown.contains(e.target) && e.target !== input) {
+                dropdown.style.display = "none";
+              }
+            });
+
+            window.parent.addEventListener("resize", positionDropdown);
+            window.parent.addEventListener("scroll", positionDropdown);
+          }
+
+          initAutocomplete();
+          setTimeout(initAutocomplete, 250);
+          setTimeout(initAutocomplete, 600);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def search_location_area() -> tuple[AnalysisArea | None, str | None]:
     st.write("Search any town, agricultural region, landmark, or farm address worldwide.")
+    render_search_autocomplete_script()
+
+    preset_labels = {
+        "🌾 Karnal, India": "Karnal, Haryana, India",
+        "🥖 Beauce, France": "Beauce, France",
+        "🍇 Salinas, California": "Salinas, California",
+        "🌾 Riverina, Australia": "Riverina, New South Wales, Australia",
+        "🌽 Des Moines, Iowa": "Des Moines, Iowa",
+        "🍅 Foggia, Italy": "Foggia, Puglia, Italy",
+    }
+
+    def _on_pill_change():
+        pill = st.session_state.get("search_preset_pill")
+        if pill and pill in preset_labels:
+            st.session_state["location_search_input"] = preset_labels[pill]
+
+    st.pills(
+        "Suggestions:",
+        list(preset_labels.keys()),
+        key="search_preset_pill",
+        on_change=_on_pill_change,
+    )
+
+    if "location_search_input" not in st.session_state:
+        st.session_state["location_search_input"] = ""
+
     col_search, col_extent = st.columns([3, 1])
     with col_search:
         search_query = st.text_input(
             "Search location",
             placeholder="e.g. Karnal, Beauce, Salinas Valley, Wagga Wagga, Foggia...",
-            help="Type a place name, region, or city and press Enter.",
+            help="Type a place name, region, or city. Autocomplete suggestions appear as you type.",
             key="location_search_input",
         )
     with col_extent:

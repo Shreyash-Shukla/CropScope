@@ -25,6 +25,14 @@ class AppUITests(unittest.TestCase):
         self.assertAlmostEqual(at.number_input(key="coord_west").value, 1.698, places=4)
         self.assertAlmostEqual(at.number_input(key="coord_east").value, 1.702, places=4)
 
+    def test_search_location_suggestions_pill_selection(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        at.radio[0].set_value("Search location").run()
+        self.assertGreater(len(at.pills), 0)
+        at.pills[0].set_value("🌾 Karnal, India").run()
+        self.assertEqual(at.text_input(key="location_search_input").value, "Karnal, Haryana, India")
+
 
 if __name__ == "__main__":
     unittest.main()
