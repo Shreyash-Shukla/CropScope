@@ -1,8 +1,14 @@
 """Interactive 3D real-time Earth globe with astronomical solar terminator.
 
-Inspired by Watched.earth: renders the Earth in space with real-time solar tracking,
-realistic day/night hemispheric division, glowing sodium-amber city lights,
-twilight terminator gradient, Rayleigh atmospheric rim, and field target instrumentation.
+Crafted strictly according to the Watched.earth design system (docs/DESIGN.md):
+- Instrument bezel viewport with 8px corner L-ticks and top-edge 24px/120px ruler
+- Fixed corner readouts in tabular Martian Mono + live ticking UTC clock with blinking sodium-orange indicator
+- Graded photoreal Earth (cool-neutral day side, deep ink oceans, real sun specular glint)
+- Real-time astronomical subsolar calculation (the terminator you see is real right now)
+- Sodium-amber (#FFB070) night city lights, soft warm twilight transition band (#FF9A5A)
+- Thin Rayleigh exponential atmosphere rim on the sunlit limb
+- Signal-orange (#FF6A1A) crosshair reticle on the field target
+- Flat ink panels, sharp 0px border-radius, pure bone/ink color tokens, zero decorative gradients
 """
 
 import datetime
@@ -24,8 +30,7 @@ def compute_subsolar_point(dt: datetime.datetime | None = None) -> Tuple[float, 
     else:
         dt = dt.astimezone(datetime.timezone.utc)
 
-    # Days since J2000.0 (2000-01-01 12:00 UTC)
-    # Unix timestamp for 2000-01-01 12:00:00 UTC is 946728000
+    # Days since J2000.0 (2000-01-01 12:00 UTC, Unix timestamp 946728000)
     timestamp = dt.timestamp()
     d = (timestamp - 946728000.0) / 86400.0
 
@@ -50,12 +55,9 @@ def compute_subsolar_point(dt: datetime.datetime | None = None) -> Tuple[float, 
 
     # Greenwich Hour Angle (GHA) of the Sun
     hours_utc = dt.hour + dt.minute / 60.0 + dt.second / 3600.0 + dt.microsecond / 3.6e9
-    # Solar noon at Greenwich corresponds to 12:00 UTC
-    # 15 degrees per hour
     gha_deg = (hours_utc - 12.0) * 15.0
     subsolar_lon = -gha_deg
 
-    # Normalize longitude to [-180, 180]
     while subsolar_lon < -180.0:
         subsolar_lon += 360.0
     while subsolar_lon > 180.0:
@@ -88,7 +90,6 @@ def is_location_sunlit(
     zenith_angle_deg = math.degrees(math.acos(cos_zenith))
     solar_elevation_deg = 90.0 - zenith_angle_deg
 
-    # Sunrise/sunset occurs when solar elevation is approximately -0.83 degrees
     is_sunlit = solar_elevation_deg >= -0.83
     return is_sunlit, round(solar_elevation_deg, 2)
 
@@ -97,17 +98,39 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --ink-0: #07080a;
+      --ink-1: #0c0e11;
+      --ink-2: #14171c;
+      --bone: #ece8e0;
+      --bone-2: rgba(236, 232, 224, 0.64);
+      --bone-3: rgba(236, 232, 224, 0.52);
+      --bone-3-mark: rgba(236, 232, 224, 0.40);
+      --bone-4: rgba(236, 232, 224, 0.18);
+      --line: rgba(236, 232, 224, 0.10);
+      --line-strong: rgba(236, 232, 224, 0.22);
+      --signal: #ff6a1a;
+      --signal-2: rgba(255, 106, 26, 0.22);
+      --ice: #a9c7d3;
+      --warn: #e8c547;
+      --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'Martian Mono', ui-monospace, 'SF Mono', monospace;
+      --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+    }
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
       user-select: none;
     }
-    body {
-      background: #030712;
-      color: #f3f4f6;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    html, body {
+      background: var(--ink-0);
+      color: var(--bone);
+      font-family: var(--font-sans);
       overflow: hidden;
       width: 100%;
       height: __HEIGHT__px;
@@ -118,140 +141,204 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       height: 100%;
       display: block;
       cursor: grab;
+      background: var(--ink-0);
     }
     #canvas-container:active {
       cursor: grabbing;
     }
-    /* Mission Control HUD Overlay */
-    .hud-panel {
+
+    /* ── Watched.earth Instrument Bezel (DESIGN §4) ── */
+    .bezel-frame {
       position: absolute;
-      background: rgba(15, 23, 42, 0.78);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 10px;
-      padding: 10px 14px;
-      pointer-events: auto;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      border: 1px solid var(--line);
+      pointer-events: none;
       z-index: 10;
     }
-    .hud-top-left {
-      top: 12px;
-      left: 12px;
+    .corner {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border: 0 solid var(--bone-3-mark);
     }
-    .hud-top-right {
-      top: 12px;
-      right: 12px;
+    .tl { top: -1px; left: -1px; border-top-width: 1px; border-left-width: 1px; }
+    .tr { top: -1px; right: -1px; border-top-width: 1px; border-right-width: 1px; }
+    .bl { bottom: -1px; left: -1px; border-bottom-width: 1px; border-left-width: 1px; }
+    .br { bottom: -1px; right: -1px; border-bottom-width: 1px; border-right-width: 1px; }
+
+    /* Top-edge ruler: ticks every 24px, major every 120px */
+    .ruler {
+      position: absolute;
+      top: 0;
+      width: 50%;
+      height: 6px;
+      background-image:
+        linear-gradient(to right, var(--bone-4) 1px, transparent 1px),
+        linear-gradient(to right, var(--bone-4) 1px, transparent 1px);
+      background-size: 120px 6px, 24px 3px;
+      background-repeat: repeat-x;
+    }
+    .ruler-left {
+      left: 20px;
+      mask-image: linear-gradient(to right, #000 0, #000 20%, transparent 80%);
+      -webkit-mask-image: linear-gradient(to right, #000 0, #000 20%, transparent 80%);
+    }
+    .ruler-right {
+      right: 20px;
+      background-position: right 0 top 0;
+      mask-image: linear-gradient(to left, #000 0, #000 20%, transparent 80%);
+      -webkit-mask-image: linear-gradient(to left, #000 0, #000 20%, transparent 80%);
+    }
+
+    /* ── Fixed Corner Readouts (Martian Mono tabular-nums) ── */
+    .corner-readout {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-variant-numeric: tabular-nums;
+      color: var(--bone-3);
+      letter-spacing: 0.06em;
+      pointer-events: auto;
+      z-index: 20;
+    }
+    .ro-tl {
+      top: 24px;
+      left: 26px;
+    }
+    .wordmark {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--bone);
+      letter-spacing: -0.01em;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .wordmark .signal-dot {
+      color: var(--signal);
+    }
+    .wordmark-sub {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--bone-3);
+    }
+
+    .ro-tr {
+      top: 24px;
+      right: 26px;
       text-align: right;
-    }
-    .hud-bottom-left {
-      bottom: 12px;
-      left: 12px;
       display: flex;
-      gap: 8px;
-    }
-    .hud-badge {
-      display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      padding: 3px 8px;
-      border-radius: 20px;
-      background: rgba(16, 185, 129, 0.15);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      margin-bottom: 6px;
     }
-    .hud-badge .pulse {
+    .clock-display {
+      color: var(--bone);
+      font-size: 11px;
+    }
+    .blink-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: #10b981;
-      box-shadow: 0 0 8px #10b981;
-      animation: pulse 1.8s infinite;
+      background: var(--signal);
+      box-shadow: 0 0 6px var(--signal);
+      animation: blink 1s steps(1) infinite;
     }
-    @keyframes pulse {
-      0% { opacity: 0.4; transform: scale(0.9); }
-      50% { opacity: 1; transform: scale(1.3); }
-      100% { opacity: 0.4; transform: scale(0.9); }
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0.15; }
     }
-    .hud-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #f9fafb;
-      max-width: 260px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+
+    .ro-bl {
+      bottom: 24px;
+      left: 26px;
     }
-    .hud-sub {
-      font-size: 11px;
-      color: #94a3b8;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      margin-top: 2px;
+    .ro-bl .status-line {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
-    .hud-btn {
-      background: rgba(30, 41, 59, 0.85);
-      color: #e2e8f0;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 11px;
-      font-weight: 500;
+    .status-tag {
+      border: 1px solid var(--bone-4);
+      padding: 1px 6px;
+      font-size: 9px;
+      color: var(--bone-2);
+      text-transform: uppercase;
+    }
+
+    .ro-br {
+      bottom: 24px;
+      right: 26px;
+      text-align: right;
+    }
+
+    /* ── Controls dock (Flat ink-1, hairline border, 0px radius) ── */
+    .controls-dock {
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
+      padding: 0;
+      z-index: 25;
+    }
+    .inst-btn {
+      background: var(--ink-1);
+      color: var(--bone);
+      border: none;
+      padding: 7px 12px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       cursor: pointer;
-      transition: all 0.2s ease;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
+      transition: background 120ms var(--ease-out, ease);
     }
-    .hud-btn:hover {
-      background: rgba(51, 65, 85, 0.95);
-      border-color: rgba(255, 255, 255, 0.3);
+    .inst-btn:hover {
+      background: var(--ink-2);
       color: #ffffff;
     }
-    .telemetry-item {
-      font-size: 11px;
-      color: #cbd5e1;
-      margin-bottom: 2px;
+    .inst-btn.active {
+      background: var(--signal);
+      color: var(--ink-0);
+      font-weight: 500;
     }
-    .telemetry-value {
-      font-weight: 600;
-      color: #38bdf8;
-      font-family: ui-monospace, monospace;
-    }
-    /* Legend Pill */
-    .legend-bar {
+
+    /* Field Callout Plate */
+    .target-callout {
       position: absolute;
-      bottom: 12px;
-      right: 12px;
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-size: 10px;
-      color: #94a3b8;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      z-index: 10;
+      top: 66px;
+      left: 26px;
+      background: var(--ink-1);
+      border: 1px solid var(--line);
+      padding: 8px 12px;
+      z-index: 15;
     }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 5px;
+    .callout-title {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--bone);
     }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
+    .callout-meta {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--bone-3);
+      margin-top: 2px;
     }
-    .dot-day { background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
-    .dot-term { background: #fb923c; box-shadow: 0 0 6px #fb923c; }
-    .dot-night { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+    .signal-text {
+      color: var(--signal);
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -259,32 +346,56 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
 <body>
   <div id="canvas-container"></div>
 
-  <!-- Top Left: Location Info & Target -->
-  <div class="hud-panel hud-top-left">
-    <div class="hud-badge"><span class="pulse"></span> 3D Real-Time Orbital Globe</div>
-    <div class="hud-title" id="hud-location-name">__LOCATION_NAME_TEXT__</div>
-    <div class="hud-sub">Lat: __LAT_FMT__° &nbsp;·&nbsp; Lon: __LON_FMT__°</div>
+  <!-- Instrument Bezel Frame -->
+  <div class="bezel-frame">
+    <span class="ruler ruler-left"></span>
+    <span class="ruler ruler-right"></span>
+    <span class="corner tl"></span>
+    <span class="corner tr"></span>
+    <span class="corner bl"></span>
+    <span class="corner br"></span>
   </div>
 
-  <!-- Top Right: Astronomical Solar Telemetry -->
-  <div class="hud-panel hud-top-right">
-    <div class="telemetry-item">Solar Status: <span class="telemetry-value" id="solar-status-text">__SOLAR_STATUS__</span></div>
-    <div class="telemetry-item">Solar Elevation: <span class="telemetry-value" id="solar-elev-text">__SOLAR_ELEV__°</span></div>
-    <div class="telemetry-item">Subsolar Lon: <span class="telemetry-value" id="subsolar-lon-text">__SUBSOLAR_LON__°</span></div>
+  <!-- Top-Left Corner Readout -->
+  <div class="corner-readout ro-tl">
+    <div class="wordmark">CropScope<span class="signal-dot">.</span></div>
+    <div class="wordmark-sub">ORBITAL MISSION CONSOLE · SGP4</div>
   </div>
 
-  <!-- Bottom Left: Interactive Controls -->
-  <div class="hud-bottom-left">
-    <button class="hud-btn" id="btn-focus">🎯 Focus Target</button>
-    <button class="hud-btn" id="btn-rotate">⏯️ Toggle Rotation</button>
-    <button class="hud-btn" id="btn-sun">☀️ Subsolar View</button>
+  <!-- Target Info Plate -->
+  <div class="target-callout">
+    <div class="callout-title">__LOCATION_NAME_TEXT__</div>
+    <div class="callout-meta">
+      <span class="signal-text">TARGET</span> __LAT_FMT__° N, __LON_FMT__° E · <span id="target-solar-state">__SOLAR_STATUS__</span>
+    </div>
   </div>
 
-  <!-- Bottom Right: Day / Night Legend -->
-  <div class="legend-bar">
-    <div class="legend-item"><span class="dot dot-day"></span> Daylight</div>
-    <div class="legend-item"><span class="dot dot-term"></span> Twilight</div>
-    <div class="legend-item"><span class="dot dot-night"></span> City Lights</div>
+  <!-- Top-Right Live UTC Clock with Blinking Signal Dot -->
+  <div class="corner-readout ro-tr">
+    <span class="clock-display" id="live-utc-clock">2026-11-14 00:00:00 UTC</span>
+    <span class="blink-dot"></span>
+  </div>
+
+  <!-- Bottom-Left Telemetry -->
+  <div class="corner-readout ro-bl">
+    <div class="status-line">
+      <span class="status-tag">SENTINEL-2 L2A</span>
+      <span>10M MULTISPECTRAL · AWS STAC · REALTIME SUN</span>
+    </div>
+  </div>
+
+  <!-- Bottom-Right Ephemeris -->
+  <div class="corner-readout ro-br">
+    <div>SUN <span id="sun-coords">__SUBSOLAR_LAT__° __SUBSOLAR_LON__°</span></div>
+    <div style="margin-top: 2px;">SOLAR ELEVATION <span id="sun-elev" style="color: var(--bone);">__SOLAR_ELEV__°</span></div>
+  </div>
+
+  <!-- Central Controls Dock -->
+  <div class="controls-dock">
+    <button class="inst-btn" id="btn-focus">🎯 Focus Target</button>
+    <button class="inst-btn active" id="btn-orbit">⏯️ Orbital Spin</button>
+    <button class="inst-btn" id="btn-sun">☀️ Solar Noon</button>
+    <button class="inst-btn" id="btn-night">🌙 Night Limb</button>
   </div>
 
   <script>
@@ -296,27 +407,30 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || __HEIGHT__;
 
-    // 1. Scene, Camera, Renderer
+    // 1. Scene & Renderer
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 0.5, 3.2);
+    scene.background = new THREE.Color(0x07080a); // --ink-0
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 1000);
+    camera.position.set(0, 0.4, 2.9);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     container.appendChild(renderer.domElement);
 
-    // 2. OrbitControls
+    // 2. Controls
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 1.35;
-    controls.maxDistance = 6.0;
+    controls.maxDistance = 5.5;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.4;
+    controls.autoRotateSpeed = 0.45;
 
-    // 3. Astronomical Subsolar Calculator
+    // 3. Astronomical Ephemeris Calculator (Exact J2000 math from geo.ts)
     function getSubsolarVector(date) {
       const now = date || new Date();
       const d = (now.getTime() - 946728000000) / 86400000.0;
@@ -338,10 +452,13 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       const x = -Math.cos(subLatRad) * Math.cos(subLonRad);
       const y = Math.sin(subLatRad);
       const z = Math.cos(subLatRad) * Math.sin(subLonRad);
-      return new THREE.Vector3(x, y, z).normalize();
+      return {
+        vec: new THREE.Vector3(x, y, z).normalize(),
+        lat: subLatRad * 180.0 / Math.PI,
+        lon: subLonDeg
+      };
     }
 
-    // Convert Lat/Lon to 3D Sphere Position
     function latLonToVector3(lat, lon, radius) {
       const phi = lat * Math.PI / 180.0;
       const theta = lon * Math.PI / 180.0;
@@ -351,26 +468,26 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       return new THREE.Vector3(x, y, z);
     }
 
-    // 4. Procedural Fallback Textures (Guarantees zero black screen while loading)
+    // 4. Procedural Fallback Textures (Guarantees zero blank screen while loading)
     function createFallbackTexture(isDay) {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
       canvas.height = 512;
       const ctx = canvas.getContext('2d');
       if (isDay) {
-        ctx.fillStyle = '#0f2b48';
+        ctx.fillStyle = '#071526';
         ctx.fillRect(0, 0, 1024, 512);
-        ctx.fillStyle = '#22543d';
+        ctx.fillStyle = '#1e3a2b';
         ctx.beginPath();
         ctx.ellipse(540, 240, 140, 100, 0, 0, Math.PI * 2);
         ctx.ellipse(320, 200, 110, 80, 0, 0, Math.PI * 2);
         ctx.ellipse(750, 340, 70, 50, 0, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        ctx.fillStyle = '#030712';
+        ctx.fillStyle = '#05070a';
         ctx.fillRect(0, 0, 1024, 512);
-        ctx.fillStyle = '#fbbf24';
-        for (let i = 0; i < 400; i++) {
+        ctx.fillStyle = '#ffb070';
+        for (let i = 0; i < 350; i++) {
           const x = 200 + Math.random() * 700;
           const y = 100 + Math.random() * 300;
           ctx.fillRect(x, y, 1.5, 1.5);
@@ -385,218 +502,271 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     const dayTex = textureLoader.load(
       'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
       undefined, undefined,
-      () => { earthMaterial.uniforms.dayTexture.value = createFallbackTexture(true); }
+      () => { earthMaterial.uniforms.uDay.value = createFallbackTexture(true); }
     );
     const nightTex = textureLoader.load(
       'https://unpkg.com/three-globe/example/img/earth-night.jpg',
       undefined, undefined,
-      () => { earthMaterial.uniforms.nightTexture.value = createFallbackTexture(false); }
+      () => { earthMaterial.uniforms.uNight.value = createFallbackTexture(false); }
     );
     const cloudsTex = textureLoader.load(
       'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png'
     );
 
-    // 5. Custom Day/Night & Twilight Terminator Shader
-    const sunDir = getSubsolarVector();
+    // 5. Earth Shader (Strict Watched.earth color grading: -12% sat, sodium lights, twilight band)
+    const initialSun = getSubsolarVector();
     const earthUniforms = {
-      dayTexture: { value: dayTex },
-      nightTexture: { value: nightTex },
-      cloudTexture: { value: cloudsTex },
-      sunDirection: { value: sunDir },
-      time: { value: 0.0 }
+      uDay: { value: dayTex },
+      uNight: { value: nightTex },
+      uClouds: { value: cloudsTex },
+      uSunDir: { value: initialSun.vec },
+      uTime: { value: 0.0 }
     };
 
     const earthVertexShader = `
       varying vec2 vUv;
       varying vec3 vNormal;
-      varying vec3 vPosition;
+      varying vec3 vPos;
       void main() {
         vUv = uv;
         vNormal = normalize(normalMatrix * normal);
-        vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.0);
       }
     `;
 
     const earthFragmentShader = `
-      uniform sampler2D dayTexture;
-      uniform sampler2D nightTexture;
-      uniform sampler2D cloudTexture;
-      uniform vec3 sunDirection;
-      uniform float time;
+      uniform sampler2D uDay;
+      uniform sampler2D uNight;
+      uniform sampler2D uClouds;
+      uniform vec3 uSunDir;
+      uniform float uTime;
 
       varying vec2 vUv;
       varying vec3 vNormal;
-      varying vec3 vPosition;
+      varying vec3 vPos;
+
+      float luma(vec3 c) {
+        return dot(c, vec3(0.299, 0.587, 0.114));
+      }
+
+      vec3 gradeDay(vec3 c) {
+        float l = luma(c);
+        // Watched.earth art direction: -12% desaturation, cool-neutral tone balance
+        return mix(vec3(l), c, 0.88) * vec3(0.96, 0.99, 1.03);
+      }
 
       void main() {
-        vec3 normal = normalize(vNormal);
-        float cosTheta = dot(normal, normalize(sunDirection));
+        vec3 N = normalize(vNormal);
+        vec3 L = normalize(uSunDir);
+        float NdL = dot(N, L);
 
-        vec4 dayColor = texture2D(dayTexture, vUv);
-        vec4 nightColor = texture2D(nightTexture, vUv);
+        vec4 daySample = texture2D(uDay, vUv);
+        vec4 nightSample = texture2D(uNight, vUv);
 
-        // Sodium amber tint for city night lights
-        vec3 cityLights = nightColor.rgb * vec3(1.15, 0.85, 0.55) * 1.6;
+        vec3 dayColor = gradeDay(daySample.rgb);
 
-        // Smooth day/night hemispheric transition
-        float dayFactor = smoothstep(-0.10, 0.15, cosTheta);
+        // Sodium amber city lights (#FFB070)
+        vec3 cityLights = nightSample.rgb * vec3(1.0, 0.69, 0.44) * 2.2;
 
-        // Soft warm twilight band along the terminator
-        float terminatorFactor = 1.0 - clamp(abs(cosTheta) * 6.0, 0.0, 1.0);
-        vec3 twilightColor = vec3(0.98, 0.45, 0.16) * terminatorFactor * 0.45;
+        // Smooth day/night hemispheric blend on NdL
+        float dayFactor = smoothstep(-0.08, 0.14, NdL);
 
-        // Specular ocean glint towards the sun
-        vec3 viewDir = normalize(-vPosition);
-        vec3 halfVector = normalize(normalize(sunDirection) + viewDir);
-        float NdotH = max(dot(normal, halfVector), 0.0);
-        float specular = pow(NdotH, 20.0) * 0.35 * dayFactor;
+        // Warm twilight terminator band (#FF9A5A)
+        float terminatorFactor = 1.0 - clamp(abs(NdL) * 6.5, 0.0, 1.0);
+        vec3 twilightColor = vec3(1.0, 0.60, 0.35) * terminatorFactor * 0.45;
 
-        // Base surface blend
-        vec3 surface = mix(cityLights, dayColor.rgb, dayFactor) + twilightColor + vec3(specular);
+        // Ocean specular glint from real sun
+        vec3 V = normalize(cameraPosition - vPos);
+        vec3 H = normalize(L + V);
+        float NdotH = max(dot(N, H), 0.0);
+        float spec = pow(NdotH, 24.0) * 0.38 * dayFactor;
+
+        vec3 surface = mix(cityLights, dayColor, dayFactor) + twilightColor + vec3(spec);
 
         // Drifting clouds overlay
-        vec2 cloudUv = vec2(vUv.x + time * 0.0006, vUv.y);
-        vec4 clouds = texture2D(cloudTexture, cloudUv);
+        vec2 cloudUv = vec2(vUv.x + uTime * 0.0005, vUv.y);
+        vec4 clouds = texture2D(uClouds, cloudUv);
         float cloudLight = mix(0.12, 1.0, dayFactor);
-        surface = mix(surface, clouds.rgb * cloudLight, clouds.r * 0.52);
+        surface = mix(surface, clouds.rgb * cloudLight, clouds.r * 0.48);
 
         gl_FragColor = vec4(surface, 1.0);
       }
     `;
 
-    const earthGeometry = new THREE.SphereGeometry(1.0, 64, 64);
     const earthMaterial = new THREE.ShaderMaterial({
       uniforms: earthUniforms,
       vertexShader: earthVertexShader,
       fragmentShader: earthFragmentShader
     });
-    const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+    const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 64, 64), earthMaterial);
     scene.add(earthMesh);
 
-    // 6. Glowing Rayleigh Atmosphere Rim Shell
-    const atmosphereVertexShader = `
-      varying vec3 vNormal;
-      varying vec3 vPosition;
+    // 6. Exponential Rayleigh Atmosphere Rim (BackSide additive)
+    const atmoVertexShader = `
+      varying vec3 vPos;
       void main() {
-        vNormal = normalize(normalMatrix * normal);
-        vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.0);
       }
     `;
-    const atmosphereFragmentShader = `
-      varying vec3 vNormal;
-      varying vec3 vPosition;
-      uniform vec3 sunDirection;
+    const atmoFragmentShader = `
+      uniform vec3 uSunDir;
+      varying vec3 vPos;
       void main() {
-        vec3 viewDir = normalize(-vPosition);
-        float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 2.8);
-        float sunFacing = max(dot(vNormal, normalize(sunDirection)), 0.0);
-        vec3 glowColor = vec3(0.2, 0.65, 1.0) * fresnel * (0.35 + 0.65 * sunFacing);
-        gl_FragColor = vec4(glowColor, fresnel * (0.3 + 0.7 * sunFacing));
+        vec3 ro = cameraPosition;
+        vec3 rd = normalize(vPos - ro);
+        float tca = -dot(ro, rd);
+        vec3 pc = ro + rd * tca;
+        float b = length(pc);
+        if (b < 1.0) discard;
+        float h = b - 1.0;
+        vec3 n = pc / b;
+        vec3 L = normalize(uSunDir);
+
+        float od = exp(-h / 0.012) * (1.0 - smoothstep(0.012, 0.025, h));
+        float mu = dot(n, L);
+        float lit = smoothstep(-0.20, 0.28, mu);
+        vec3 rimColor = vec3(0.58, 0.76, 1.0) * od * (0.2 + 0.8 * lit);
+        gl_FragColor = vec4(rimColor, od * (0.25 + 0.75 * lit));
       }
     `;
-    const atmosphereMaterial = new THREE.ShaderMaterial({
-      uniforms: { sunDirection: { value: sunDir } },
-      vertexShader: atmosphereVertexShader,
-      fragmentShader: atmosphereFragmentShader,
+    const atmoMaterial = new THREE.ShaderMaterial({
+      uniforms: { uSunDir: { value: initialSun.vec } },
+      vertexShader: atmoVertexShader,
+      fragmentShader: atmoFragmentShader,
       blending: THREE.AdditiveBlending,
       side: THREE.BackSide,
       transparent: true
     });
-    const atmosphereMesh = new THREE.Mesh(new THREE.SphereGeometry(1.025, 48, 48), atmosphereMaterial);
-    scene.add(atmosphereMesh);
+    const atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(1.025, 48, 48), atmoMaterial);
+    scene.add(atmoMesh);
 
-    // 7. Background Starfield
-    const starGeometry = new THREE.BufferGeometry();
-    const starCount = 1200;
-    const starPositions = new Float32Array(starCount * 3);
-    for (let i = 0; i < starCount * 3; i += 3) {
-      const r = 25.0 + Math.random() * 20.0;
+    // 7. Starfield (Sparse and dim, no twinkle)
+    const starGeom = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(900 * 3);
+    for (let i = 0; i < 900 * 3; i += 3) {
+      const r = 24.0 + Math.random() * 20.0;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       starPositions[i] = r * Math.sin(phi) * Math.cos(theta);
       starPositions[i + 1] = r * Math.sin(phi) * Math.sin(theta);
       starPositions[i + 2] = r * Math.cos(phi);
     }
-    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    const starMaterial = new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.12, transparent: true, opacity: 0.7 });
-    scene.add(new THREE.Points(starGeometry, starMaterial));
+    starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    const starMaterial = new THREE.PointsMaterial({ color: 0x94a3b8, size: 0.1, transparent: true, opacity: 0.55 });
+    scene.add(new THREE.Points(starGeom, starMaterial));
 
-    // 8. Field Target Marker on Globe
-    const targetPos = latLonToVector3(targetLat, targetLon, 1.012);
+    // 8. Place Marker: Watched.earth Crosshair Reticle (thin ring, 4 ticks, center dot)
+    const targetPos = latLonToVector3(targetLat, targetLon, 1.008);
     const markerGroup = new THREE.Group();
 
-    // Emerald center sphere
-    const pinGeom = new THREE.SphereGeometry(0.016, 16, 16);
-    const pinMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-    const pinMesh = new THREE.Mesh(pinGeom, pinMat);
-    pinMesh.position.copy(targetPos);
-    markerGroup.add(pinMesh);
+    // Center dot (sodium orange)
+    const dotGeom = new THREE.SphereGeometry(0.012, 16, 16);
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a });
+    const dotMesh = new THREE.Mesh(dotGeom, dotMat);
+    dotMesh.position.copy(targetPos);
+    markerGroup.add(dotMesh);
 
-    // Pulsing radar ring
-    const ringGeom = new THREE.RingGeometry(0.024, 0.034, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x34d399, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+    // Thin reticle ring
+    const ringGeom = new THREE.RingGeometry(0.024, 0.028, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a, side: THREE.DoubleSide });
     const ringMesh = new THREE.Mesh(ringGeom, ringMat);
     ringMesh.position.copy(targetPos);
     ringMesh.lookAt(targetPos.clone().multiplyScalar(2));
     markerGroup.add(ringMesh);
 
+    // 4 Crosshair ticks
+    const tickLen = 0.014;
+    const tickMat = new THREE.LineBasicMaterial({ color: 0xff6a1a });
+    const northPt = latLonToVector3(targetLat + 0.8, targetLon, 1.008);
+    const southPt = latLonToVector3(targetLat - 0.8, targetLon, 1.008);
+    const eastPt = latLonToVector3(targetLat, targetLon + 0.8, 1.008);
+    const westPt = latLonToVector3(targetLat, targetLon - 0.8, 1.008);
+
+    function makeLine(p1, p2) {
+      const g = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      return new THREE.Line(g, tickMat);
+    }
+    markerGroup.add(makeLine(targetPos, northPt));
+    markerGroup.add(makeLine(targetPos, southPt));
+    markerGroup.add(makeLine(targetPos, eastPt));
+    markerGroup.add(makeLine(targetPos, westPt));
+
     scene.add(markerGroup);
 
-    // 9. Camera Focus onto Target
+    // 9. Camera Director
     function focusTarget() {
-      const camTargetPos = targetPos.clone().normalize().multiplyScalar(2.4);
+      const camTargetPos = targetPos.clone().normalize().multiplyScalar(2.3);
       let step = 0;
       function animateCam() {
         step += 0.04;
         camera.position.lerp(camTargetPos, 0.08);
         controls.target.set(0, 0, 0);
         controls.update();
-        if (step < 1.0) {
-          requestAnimationFrame(animateCam);
-        }
+        if (step < 1.0) requestAnimationFrame(animateCam);
       }
       animateCam();
     }
-    setTimeout(focusTarget, 600);
+    setTimeout(focusTarget, 500);
 
-    // Interactive Button Listeners
+    // Button interactions
+    const btnOrbit = document.getElementById('btn-orbit');
     document.getElementById('btn-focus').addEventListener('click', focusTarget);
-    document.getElementById('btn-rotate').addEventListener('click', () => {
+    btnOrbit.addEventListener('click', () => {
       controls.autoRotate = !controls.autoRotate;
+      btnOrbit.classList.toggle('active', controls.autoRotate);
     });
     document.getElementById('btn-sun').addEventListener('click', () => {
-      const sunPos = earthUniforms.sunDirection.value.clone().multiplyScalar(2.6);
+      const sunPos = earthUniforms.uSunDir.value.clone().multiplyScalar(2.5);
       camera.position.copy(sunPos);
       controls.target.set(0, 0, 0);
       controls.update();
     });
+    document.getElementById('btn-night').addEventListener('click', () => {
+      const nightPos = earthUniforms.uSunDir.value.clone().multiplyScalar(-2.5);
+      camera.position.copy(nightPos);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    });
 
-    // 10. Animation Loop
-    let clock = new THREE.Clock();
+    // 10. Frame Loop & Live Clock
+    const clock = new THREE.Clock();
+    const clockElem = document.getElementById('live-utc-clock');
+    const sunCoordsElem = document.getElementById('sun-coords');
+    const sunElevElem = document.getElementById('sun-elev');
+
+    function pad2(n) { return n < 10 ? '0' + n : n; }
+
     function animate() {
       requestAnimationFrame(animate);
-      const elapsedTime = clock.getElapsedTime();
+      const elapsed = clock.getElapsedTime();
 
-      // Update solar direction every ~3 seconds
-      if (Math.floor(elapsedTime) % 3 === 0) {
-        const updatedSun = getSubsolarVector();
-        earthUniforms.sunDirection.value.copy(updatedSun);
-        atmosphereMaterial.uniforms.sunDirection.value.copy(updatedSun);
+      // Update live UTC clock string
+      const now = new Date();
+      const utcStr = now.getUTCFullYear() + '-' +
+        pad2(now.getUTCMonth() + 1) + '-' +
+        pad2(now.getUTCDate()) + ' ' +
+        pad2(now.getUTCHours()) + ':' +
+        pad2(now.getUTCMinutes()) + ':' +
+        pad2(now.getUTCSeconds()) + ' UTC';
+      clockElem.innerText = utcStr;
+
+      // Update sun direction every 2 seconds
+      if (Math.floor(elapsed) % 2 === 0) {
+        const sunData = getSubsolarVector(now);
+        earthUniforms.uSunDir.value.copy(sunData.vec);
+        atmoMaterial.uniforms.uSunDir.value.copy(sunData.vec);
+        sunCoordsElem.innerText = (sunData.lat >= 0 ? '+' : '') + sunData.lat.toFixed(1) + '° ' + (sunData.lon >= 0 ? '+' : '') + sunData.lon.toFixed(1) + '°';
       }
 
-      // Cloud drift & pulse animation
-      earthUniforms.time.value = elapsedTime;
-      const pulseScale = 1.0 + 0.25 * Math.sin(elapsedTime * 4.0);
-      ringMesh.scale.set(pulseScale, pulseScale, pulseScale);
+      earthUniforms.uTime.value = elapsed;
 
       controls.update();
       renderer.render(scene, camera);
     }
     animate();
 
-    // 11. Handle Resizing
     window.addEventListener('resize', () => {
       const newW = container.clientWidth || window.innerWidth;
       const newH = container.clientHeight || __HEIGHT__;
@@ -614,20 +784,12 @@ def build_globe_html(
     center_lat: float,
     center_lon: float,
     location_name: str = "Selected Field",
-    height: int = 500,
+    height: int = 560,
 ) -> str:
-    """Build a complete, standalone Three.js WebGL component showing a 3D Earth.
-
-    Features:
-    - Real-time astronomical day/night terminator with warm twilight gradient.
-    - Blue Marble daytime earth & warm amber city night lights.
-    - Drifting cloud layer and starry space background.
-    - Pulsing mission-control target marker at the field coordinates.
-    - Telemetry HUD with live solar altitude, daylight state, and UTC tracking.
-    """
+    """Build a complete Three.js WebGL component styled with Watched.earth art direction."""
     sub_lat, sub_lon = compute_subsolar_point()
     is_day, elevation = is_location_sunlit(center_lat, center_lon)
-    solar_status = "☀️ Sunlit (Daytime)" if is_day else "🌙 In Shadow (Night)"
+    solar_status = "DAYLIGHT" if is_day else "NIGHT SHADOW"
 
     html = _GLOBE_TEMPLATE
     html = html.replace("__HEIGHT__", str(height))
@@ -639,6 +801,7 @@ def build_globe_html(
     html = html.replace("__TARGET_LON__", str(center_lon))
     html = html.replace("__SOLAR_STATUS__", solar_status)
     html = html.replace("__SOLAR_ELEV__", f"{elevation:+.1f}")
+    html = html.replace("__SUBSOLAR_LAT__", f"{sub_lat:+.1f}")
     html = html.replace("__SUBSOLAR_LON__", f"{sub_lon:+.1f}")
 
     return html

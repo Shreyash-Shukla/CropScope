@@ -46,7 +46,7 @@ class GlobeAstronomicalTests(unittest.TestCase):
         self.assertIn("77.048", html)
         self.assertIn("earthVertexShader", html)
         self.assertIn("earthFragmentShader", html)
-        self.assertIn("atmosphereFragmentShader", html)
+        self.assertIn("atmoFragmentShader", html)
         self.assertIn("subsolar", html.lower())
 
 

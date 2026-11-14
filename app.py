@@ -363,22 +363,16 @@ def my_location_area() -> tuple[AnalysisArea | None, str | None]:
 def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> None:
     lat, lon = area.center
     is_day, elev = is_location_sunlit(lat, lon)
-    sun_badge = "☀️ Sunlit (Daytime)" if is_day else "🌙 In Shadow (Night)"
+    sun_badge = "DAYLIGHT" if is_day else "NIGHT SHADOW"
 
-    view_tab1, view_tab2 = st.tabs(["🛰️ 3D Real-Time Orbital Globe", "🗺️ 2D High-Res Field Map"])
-    with view_tab1:
-        st.caption(
-            f"**Real-time solar terminator & satellite orbital view** · "
-            f"Field center: `{lat:.5f}°, {lon:.5f}°` · Solar status: **{sun_badge}** ({elev:+.1f}° elevation)"
-        )
-        globe_html = build_globe_html(lat, lon, location_title, height=450)
-        st.components.v1.html(globe_html, height=465)
+    globe_html = build_globe_html(lat, lon, location_title, height=540)
+    st.components.v1.html(globe_html, height=555)
 
-    with view_tab2:
+    with st.expander("MAP / 2D High-Resolution Field Inspection Boundary", expanded=False):
         preview = folium.Map(location=list(area.center), zoom_start=14, control_scale=True, tiles=None)
         folium.Rectangle(
             bounds=[[area.south, area.west], [area.north, area.east]],
-            color="#10b981",
+            color="#ff6a1a",
             fill=True,
             fill_opacity=0.18,
         ).add_to(preview)
@@ -399,16 +393,26 @@ def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> 
 def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     summary = compute_agro_climatic_summary(result)
     suitability_icons = {
-        "Favorable": "🟢 Favorable",
-        "Caution: Wet": "🟡 Caution: Wet",
-        "Caution: Heat": "🟡 Caution: Heat",
-        "Restricted: Rain": "🔴 Restricted: Rain",
-        "Restricted: Heat": "🔴 Restricted: Heat",
+        "Favorable": "[FAVORABLE]",
+        "Caution: Wet": "[CAUTION: WET]",
+        "Caution: Heat": "[CAUTION: HEAT]",
+        "Restricted: Rain": "[RESTRICTED: RAIN]",
+        "Restricted: Heat": "[RESTRICTED: HEAT]",
     }
 
     hdr_col, unit_col = st.columns([3, 1])
     with hdr_col:
-        st.subheader("Seven-day forecast & water balance")
+        st.markdown(
+            """
+            <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
+              03 / AGRO-CLIMATIC WATER BALANCE
+            </div>
+            <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.1; margin-bottom: 8px;">
+              Seven-day forecast & water balance
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     with unit_col:
         is_imperial = st.toggle("Imperial units (°F, in)", value=False, key="is_imperial_units")
 
@@ -460,9 +464,14 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         else "Deficit" if summary.net_balance_mm <= -15.0
         else "Near-neutral"
     )
+    formatted_balance = (
+        f"{to_len(summary.net_balance_mm):+0.2f}"
+        if is_imperial
+        else f"{summary.net_balance_mm:+0.1f}"
+    )
     d.metric(
         f"Net water balance ({len_unit})",
-        f"{to_len(summary.net_balance_mm):+0.2f if is_imperial else summary.net_balance_mm:+0.1f} {len_unit}",
+        f"{formatted_balance} {len_unit}",
         delta=status_short,
         delta_color="normal" if summary.net_balance_mm >= 0 else "inverse",
         help=f"Cumulative precipitation minus reference ET₀: {summary.status_label}. Atmospheric indicator of drying vs wetting trend.",
@@ -502,13 +511,21 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
 
 
 def show_satellite(result: SatelliteResult) -> None:
-    st.subheader("Sentinel-2 vegetation observation")
-    st.write(f"**Scene:** [{result.scene_id}]({result.catalog_url})")
-    st.caption(
-        f"Acquired {result.acquired_at_utc.strftime('%d %b %Y, %H:%M UTC')} · "
-        f"Scene-wide cloud cover {result.scene_cloud_percent:.1f}% · "
-        f"Read {result.width} × {result.height} pixels per 10 m band within the selected rectangle · "
-        f"Fetched {result.fetched_at_utc.strftime('%d %b %Y, %H:%M UTC')}"
+    st.markdown(
+        f"""
+        <div style="margin-top: 20px; margin-bottom: 18px; border-top: 1px solid var(--line); padding-top: 20px;">
+          <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">
+            02 / SATELLITE PASS ACQUISITION
+          </div>
+          <div style="font-family: var(--font-sans); font-size: 28px; font-weight: 500; color: var(--bone); line-height: 1.05; letter-spacing: -0.02em;">
+            In the last 7 days, <span style="font-family: var(--font-serif); font-style: italic; color: var(--signal);">Sentinel-2 watched</span> this field.
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--bone-2); margin-top: 6px; letter-spacing: 0.04em;">
+            Scene <code>{result.scene_id}</code> · Acquired {result.acquired_at_utc.strftime('%Y-%m-%d %H:%M:%S UTC')} · Cloud cover: {result.scene_cloud_percent:.1f}% · 10m Ground Resolution
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
     if result.quality_message:
         st.warning(result.quality_message)
@@ -543,11 +560,11 @@ def show_satellite(result: SatelliteResult) -> None:
         if result.canopy_zones:
             st.markdown("**Vegetation Canopy Distribution**")
             zone_meta = [
-                ("Dense", "🟩", "#15803d", "Dense Canopy (NDVI > 0.60)"),
-                ("Moderate", "🟨", "#84cc16", "Moderate Canopy (NDVI 0.35 - 0.60)"),
-                ("Sparse", "🟧", "#eab308", "Sparse / Emerging (NDVI 0.20 - 0.35)"),
-                ("Bare Soil", "🟫", "#a16207", "Bare Soil / Non-Vegetated (NDVI 0.00 - 0.20)"),
-                ("Water / Neg", "🟦", "#0284c7", "Water / Negative Index (NDVI < 0.00)"),
+                ("Dense", "■", "#15803d", "Dense Canopy (NDVI > 0.60)"),
+                ("Moderate", "■", "#84cc16", "Moderate Canopy (NDVI 0.35 - 0.60)"),
+                ("Sparse", "■", "#eab308", "Sparse / Emerging (NDVI 0.20 - 0.35)"),
+                ("Bare Soil", "■", "#a16207", "Bare Soil / Non-Vegetated (NDVI 0.00 - 0.20)"),
+                ("Water / Neg", "■", "#0284c7", "Water / Negative Index (NDVI < 0.00)"),
             ]
             segments_html = []
             for (zone_name, pct), (short_name, icon, color, tooltip) in zip(result.canopy_zones.items(), zone_meta):
@@ -602,7 +619,19 @@ def show_satellite_state(state: SourceState) -> None:
 
 
 def show_suggestions(outcome: AnalysisOutcome) -> None:
-    st.subheader("Checks to consider next")
+    st.markdown(
+        """
+        <div style="margin-top: 24px; margin-bottom: 14px; border-top: 1px solid var(--line); padding-top: 18px;">
+          <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
+            04 / FIELD ACTION CHECKS
+          </div>
+          <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.1;">
+            Prioritized agronomic checks
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     if not outcome.suggestions:
         st.info("No supported suggestion is available from the current results. Retry the live sources or choose another area.")
         return
@@ -614,14 +643,25 @@ def show_suggestions(outcome: AnalysisOutcome) -> None:
 
 
 def show_export_section(outcome: AnalysisOutcome) -> None:
-    st.divider()
-    st.subheader("Field advisory report & GIS boundary export")
+    st.markdown(
+        """
+        <div style="margin-top: 24px; margin-bottom: 14px; border-top: 1px solid var(--line); padding-top: 18px;">
+          <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
+            05 / EXPORT & GIS BOUNDARY
+          </div>
+          <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.1;">
+            Field advisory report & GIS boundary export
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.caption("Download a complete, dated advisory report containing coordinates, crop stage, agro-climatic water balance, satellite vegetation metrics, prioritized checks, or the GIS field boundary.")
     dl_left, dl_mid, dl_right = st.columns(3)
     filename_base = advisory_filename_base(outcome)
     with dl_left:
         st.download_button(
-            label="📥 Advisory Report (Markdown)",
+            label="Advisory Report (Markdown)",
             data=generate_advisory_markdown(outcome),
             file_name=f"{filename_base}.md",
             mime="text/markdown",
@@ -629,7 +669,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
     with dl_mid:
         st.download_button(
-            label="📥 Raw Analysis (JSON)",
+            label="Raw Analysis (JSON)",
             data=generate_advisory_json(outcome),
             file_name=f"{filename_base}.json",
             mime="application/json",
@@ -637,7 +677,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
     with dl_right:
         st.download_button(
-            label="📥 Field Boundary (GeoJSON)",
+            label="Field Boundary (GeoJSON)",
             data=generate_area_geojson_str(outcome.request.area, f"{outcome.request.crop} Field Boundary"),
             file_name=f"{filename_base}_boundary.geojson",
             mime="application/geo+json",
@@ -646,7 +686,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
 
 
 st.set_page_config(
-    page_title="CropScope · Orbital Agricultural Intelligence",
+    page_title="CropScope · Watched",
     page_icon="🛰️",
     layout="wide",
 )
@@ -654,65 +694,206 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-      /* Watched.earth Deep-Space Mission Control Aesthetics */
+      @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@300;400;500;600&display=swap');
+
+      :root {
+        --ink-0: #07080a;
+        --ink-1: #0c0e11;
+        --ink-2: #14171c;
+        --bone: #ece8e0;
+        --bone-2: rgba(236, 232, 224, 0.64);
+        --bone-3: rgba(236, 232, 224, 0.52);
+        --bone-4: rgba(236, 232, 224, 0.18);
+        --line: rgba(236, 232, 224, 0.10);
+        --line-strong: rgba(236, 232, 224, 0.22);
+        --signal: #ff6a1a;
+        --signal-hover: #ff8340;
+        --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        --font-mono: 'Martian Mono', ui-monospace, monospace;
+        --font-serif: 'Instrument Serif', Georgia, serif;
+      }
+
+      /* ── Watched.earth Hard Rules (DESIGN §1) ── */
+      /* Pure ink background & bone typography */
       .stApp {
-        background: radial-gradient(circle at 50% 0%, #0f172a 0%, #030712 100%);
-        color: #f1f5f9;
+        background-color: var(--ink-0) !important;
+        color: var(--bone) !important;
+        font-family: var(--font-sans) !important;
+      }
+
+      /* Anti-slop: zero border radius everywhere */
+      *, *::before, *::after {
+        border-radius: 0px !important;
+      }
+
+      /* Streamlit Header & Navigation Chrome */
+      header[data-testid="stHeader"] {
+        background: var(--ink-0) !important;
+        border-bottom: 1px solid var(--line) !important;
       }
       .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3.5rem;
+        padding-top: 1.5rem !important;
+        padding-bottom: 3.5rem !important;
+        max-width: 1280px !important;
       }
-      /* Sleek Glassmorphism Cards for Metrics */
+
+      /* Typography */
+      h1, h2, h3, h4, h5, h6 {
+        font-family: var(--font-sans) !important;
+        color: var(--bone) !important;
+        font-weight: 500 !important;
+        letter-spacing: -0.02em !important;
+      }
+      p, span, label, div {
+        color: var(--bone) !important;
+      }
+      small, .stCaption {
+        font-family: var(--font-mono) !important;
+        font-size: 11px !important;
+        color: var(--bone-3) !important;
+        letter-spacing: 0.04em !important;
+      }
+
+      /* Buttons: Sharp, flat ink or signal orange */
+      button[kind="primary"], .stButton > button[kind="primary"] {
+        background-color: var(--signal) !important;
+        color: var(--ink-0) !important;
+        font-family: var(--font-mono) !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        border: 1px solid var(--signal) !important;
+        padding: 10px 18px !important;
+        box-shadow: none !important;
+        transition: background 120ms ease !important;
+      }
+      button[kind="primary"]:hover {
+        background-color: var(--signal-hover) !important;
+      }
+      button[kind="secondary"], .stButton > button {
+        background-color: var(--ink-1) !important;
+        color: var(--bone) !important;
+        font-family: var(--font-mono) !important;
+        font-size: 11px !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        border: 1px solid var(--line-strong) !important;
+        padding: 10px 18px !important;
+        box-shadow: none !important;
+        transition: all 120ms ease !important;
+      }
+      button[kind="secondary"]:hover, .stButton > button:hover {
+        background-color: var(--ink-2) !important;
+        border-color: var(--bone-2) !important;
+        color: #ffffff !important;
+      }
+
+      /* Inputs: Flat ink-1 with hairline borders */
+      input, textarea, select, div[data-baseweb="input"], div[data-baseweb="select"] > div {
+        background-color: var(--ink-1) !important;
+        color: var(--bone) !important;
+        border: 1px solid var(--line-strong) !important;
+        font-family: var(--font-mono) !important;
+        font-size: 12px !important;
+        box-shadow: none !important;
+      }
+      input:focus, div[data-baseweb="input"]:focus-within {
+        border-color: var(--signal) !important;
+      }
+
+      /* Metrics / Readouts */
       div[data-testid="stMetric"] {
-        background: rgba(15, 23, 42, 0.70);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 10px;
-        padding: 12px 16px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        background-color: var(--ink-1) !important;
+        border: 1px solid var(--line) !important;
+        padding: 14px 16px !important;
+        box-shadow: none !important;
       }
-      /* Mission Control Hero Badge */
-      .orbital-hero {
-        margin-bottom: 20px;
+      div[data-testid="stMetricLabel"] p {
+        font-family: var(--font-mono) !important;
+        font-size: 10px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.08em !important;
+        color: var(--bone-3) !important;
       }
-      .orbital-pill {
-        display: inline-flex;
+      div[data-testid="stMetricValue"] div {
+        font-family: var(--font-mono) !important;
+        font-size: 20px !important;
+        font-variant-numeric: tabular-nums !important;
+        color: var(--bone) !important;
+      }
+
+      /* Radio Navigation */
+      div[data-testid="stRadio"] label {
+        font-family: var(--font-mono) !important;
+        font-size: 11px !important;
+        letter-spacing: 0.06em !important;
+        text-transform: uppercase !important;
+      }
+
+      /* Expanders */
+      div[data-testid="stExpander"] {
+        background-color: var(--ink-1) !important;
+        border: 1px solid var(--line) !important;
+      }
+
+      /* Dataframes / Tables */
+      div[data-testid="stDataFrame"] {
+        border: 1px solid var(--line) !important;
+      }
+
+      /* Watched.earth Hero Section */
+      .hero-container {
+        margin-bottom: 24px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .hero-kicker {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--bone-3);
+        margin-bottom: 10px;
+        display: flex;
         align-items: center;
         gap: 8px;
-        padding: 4px 12px;
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        border-radius: 9999px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #34d399;
-        margin-bottom: 10px;
       }
-      .orbital-pill .live-indicator {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #10b981;
-        box-shadow: 0 0 10px #10b981;
+      .hero-kicker-dot {
+        width: 6px;
+        height: 6px;
+        background: var(--signal);
+        display: inline-block;
       }
-      /* Expander Glass Styling */
-      div[data-testid="stExpander"] {
-        background: rgba(15, 23, 42, 0.55);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 10px;
+      .hero-title {
+        font-family: var(--font-sans);
+        font-size: clamp(34px, 4.6vw, 60px);
+        font-weight: 520;
+        line-height: 0.94;
+        letter-spacing: -0.02em;
+        color: var(--bone);
+        margin: 0 0 12px 0;
+      }
+      .hero-serif {
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-weight: 400;
+        color: var(--signal);
+        font-size: 1.05em;
+      }
+      .hero-sub {
+        font-family: var(--font-sans);
+        font-size: 15px;
+        color: var(--bone-2);
+        max-width: 640px;
+        line-height: 1.45;
+        margin: 0;
       }
     </style>
-    <div class="orbital-hero">
-      <div class="orbital-pill"><span class="live-indicator"></span> Real-Time Orbital Tracking & Sentinel-2 Intelligence</div>
-      <h1 style="margin: 0; font-size: 2.3rem; font-weight: 700; background: linear-gradient(135deg, #f8fafc 0%, #cbd5e1 50%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">CropScope</h1>
-      <p style="color: #94a3b8; font-size: 15px; margin-top: 6px;">
-        Track real-time Earth solar terminator, Sentinel-2 multi-spectral vegetation passes, and agro-climatic water balance for any agricultural field on Earth.
-      </p>
+    <div class="hero-container">
+      <div class="hero-kicker"><span class="hero-kicker-dot"></span> 01 / ORBITAL SENSING CONSOLE · SGP4 CELESTRAK</div>
+      <div class="hero-title">Something watched <span class="hero-serif">your crops</span> this week.</div>
+      <div class="hero-sub">Enter any field or farm location on Earth. See every Sentinel-2 multispectral pass, NDVI canopy health, and 7-day agro-climatic water balance.</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -757,7 +938,7 @@ else:
         f"North {area.north:.6f}°, East {area.east:.6f}° "
         f"(centre {latitude:.5f}°, {longitude:.5f}°)."
     )
-    with st.expander("📍 Field Boundary Details & GIS Coordinates", expanded=False):
+    with st.expander("COORDINATES / Bounding Box & GIS Geometry", expanded=False):
         c1, c2 = st.columns([2, 1])
         with c1:
             st.code(
@@ -767,7 +948,7 @@ else:
             )
         with c2:
             st.download_button(
-                "📥 Download GeoJSON Boundary",
+                "Export Field Boundary (GeoJSON)",
                 data=generate_area_geojson_str(area, "Field Boundary"),
                 file_name="crop_field_boundary.geojson",
                 mime="application/geo+json",
@@ -800,13 +981,13 @@ with second:
         help="Growth stage informs field checks, water sensitivity, and operational advisories.",
     )
     if growth_stage:
-        st.caption(f"💡 *{get_growth_stage_guidance(growth_stage)}*")
+        st.caption(f"GUIDANCE: {get_growth_stage_guidance(growth_stage)}")
 
 first_button, second_button = st.columns(2)
 with first_button:
-    analyze_live = st.button("Analyze / retry live", type="primary", use_container_width=True)
+    analyze_live = st.button("ANALYZE SATELLITE PASSES →", type="primary", use_container_width=True)
 with second_button:
-    use_saved = st.button("Use saved result for this rectangle", use_container_width=True)
+    use_saved = st.button("USE SAVED ARCHIVE SCENE", use_container_width=True)
 
 current_request = AnalysisRequest(area, crop, growth_stage) if area and crop and growth_stage else None
 last_request = st.session_state.get("analysis_request")
