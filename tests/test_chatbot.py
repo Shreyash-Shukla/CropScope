@@ -2,7 +2,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 
 from analysis import AnalysisOutcome, SourceState
-from chatbot import build_farmer_dossier, get_dossier_summary_stats
+from chatbot import build_farmer_dossier, chat_with_kisan_mitra, get_dossier_summary_stats
 from location import SAMPLE_AREA
 from models import AnalysisRequest, ForecastDay, SatelliteResult, WeatherResult
 from recommendations import Candidate, Evidence, Suggestion
@@ -124,6 +124,92 @@ class ChatbotDossierTests(unittest.TestCase):
         self.assertTrue(stats_clear["safe_to_spray_next_48h"])
         dossier_clear = build_farmer_dossier(outcome_clear)
         self.assertIn("Spray Safety Window Next 48h: FAVORABLE", dossier_clear)
+
+
+class ChatbotEngineTests(unittest.TestCase):
+    def setUp(self):
+        self.outcome = make_test_outcome(weather_ok=True, satellite_ok=True)
+        self.stats = get_dossier_summary_stats(self.outcome)
+        self.dossier = build_farmer_dossier(self.outcome)
+
+    def test_fallback_rain_query(self):
+        resp_en = chat_with_kisan_mitra(
+            [{"role": "user", "content": "Will it rain this week?"}],
+            self.dossier,
+            self.stats,
+            lang="en",
+            api_key="",
+        )
+        self.assertIn("Weather & Rainfall Outlook", resp_en)
+        self.assertIn("42.0 mm", resp_en)
+
+        resp_hi = chat_with_kisan_mitra(
+            [{"role": "user", "content": "क्या बारिश होगी?"}],
+            self.dossier,
+            self.stats,
+            lang="hi",
+            api_key="",
+        )
+        self.assertIn("मौसम व वर्षा रिपोर्ट", resp_hi)
+        self.assertIn("मिमी", resp_hi)
+
+    def test_fallback_spray_query(self):
+        # Rainy scenario -> caution
+        rainy_outcome = make_test_outcome(weather_ok=True, rain_override=5.0)
+        rainy_stats = get_dossier_summary_stats(rainy_outcome)
+        resp_caution = chat_with_kisan_mitra(
+            [{"role": "user", "content": "Can I spray pesticide tomorrow?"}],
+            self.dossier,
+            rainy_stats,
+            lang="en",
+            api_key="",
+        )
+        self.assertIn("UNFAVORABLE", resp_caution)
+        self.assertIn("Hold chemical spraying", resp_caution)
+
+        # Dry scenario -> favorable
+        dry_outcome = make_test_outcome(weather_ok=True, rain_override=0.0, temp_override=24.0)
+        dry_stats = get_dossier_summary_stats(dry_outcome)
+        resp_favorable = chat_with_kisan_mitra(
+            [{"role": "user", "content": "Can I spray fertilizer tomorrow?"}],
+            self.dossier,
+            dry_stats,
+            lang="en",
+            api_key="",
+        )
+        self.assertIn("Favorable window", resp_favorable)
+
+    def test_fallback_ndvi_canopy_query(self):
+        resp = chat_with_kisan_mitra(
+            [{"role": "user", "content": "How is my crop NDVI and greenness?"}],
+            self.dossier,
+            self.stats,
+            lang="en",
+            api_key="",
+        )
+        self.assertIn("Satellite Vegetation Health", resp)
+        self.assertIn("0.58", resp)
+
+    def test_chat_with_gemini_client_mock(self):
+        from unittest.mock import MagicMock, patch
+
+        mock_resp = MagicMock()
+        mock_resp.text = "राम राम किसान भाई! आपकी गेहूं की फसल हरी-भरी है और मौसम अनुकूल है।"
+
+        with patch("chatbot.genai.Client") as mock_client_cls:
+            mock_client_instance = MagicMock()
+            mock_client_instance.models.generate_content.return_value = mock_resp
+            mock_client_cls.return_value.__enter__.return_value = mock_client_instance
+
+            res = chat_with_kisan_mitra(
+                [{"role": "user", "content": "नमस्ते, मेरी फसल कैसी है?"}],
+                self.dossier,
+                self.stats,
+                lang="hi",
+                api_key="mock-test-key",
+            )
+            self.assertEqual(res, mock_resp.text)
+            mock_client_instance.models.generate_content.assert_called_once()
 
 
 if __name__ == "__main__":
