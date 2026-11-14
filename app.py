@@ -20,8 +20,16 @@ from agronomy import (
 )
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
+import chatbot
+if not hasattr(chatbot, "chat_with_kisan_mitra"):
+    import importlib
+    importlib.reload(chatbot)
 from chatbot import build_farmer_dossier, chat_with_kisan_mitra, get_dossier_summary_stats
 from globe import build_globe_html, is_location_sunlit
+import i18n
+if not hasattr(i18n, "format_crop_label"):
+    import importlib
+    importlib.reload(i18n)
 from i18n import (
     SUPPORTED_LANGUAGES,
     format_crop_label,
