@@ -20,6 +20,7 @@ from agronomy import (
 )
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
+from chatbot import build_farmer_dossier, chat_with_kisan_mitra, get_dossier_summary_stats
 from globe import build_globe_html, is_location_sunlit
 from i18n import (
     SUPPORTED_LANGUAGES,
@@ -1068,6 +1069,82 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
 
 
+def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
+    lang = st.session_state.get("selected_language", "en")
+
+    st.markdown(
+        f"""
+        <div style="margin-top: 28px; margin-bottom: 14px; border-top: 1px solid var(--line); padding-top: 20px;">
+          <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
+            06 / GROUNDED AI FIELD ADVISOR · KISAN MITRA (किसान मित्र)
+          </div>
+          <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.1;">
+            {t("kisan_mitra_title", lang)}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption(t("kisan_mitra_caption", lang))
+
+    # Initialize chat history
+    if "kisan_chat_messages" not in st.session_state:
+        st.session_state.kisan_chat_messages = []
+
+    # Reset button in right-aligned column
+    c_chat_info, c_chat_reset = st.columns([5, 1])
+    with c_chat_info:
+        st.caption(f"Language: **{SUPPORTED_LANGUAGES.get(lang, {}).get('label', 'English')}** · Grounded on live Sentinel-2 & Open-Meteo dossier")
+    with c_chat_reset:
+        if st.button("🔄 Clear Chat", key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
+            st.session_state.kisan_chat_messages = []
+            st.rerun()
+
+    # Pre-build ground-truth dossier and stats
+    dossier = build_farmer_dossier(outcome, lang=lang)
+    stats = get_dossier_summary_stats(outcome)
+
+    # Render quick prompt suggestion pills
+    quick_prompts = get_quick_prompts(lang)
+    st.markdown(f"<span style='font-family: var(--font-mono); font-size: 11px; color: var(--bone-3);'>{t('quick_prompts_label', lang)}</span>", unsafe_allow_html=True)
+    selected_quick_pill = st.pills(
+        "Suggested Questions",
+        quick_prompts,
+        key="kisan_quick_pills",
+        label_visibility="collapsed",
+    )
+
+    # Render conversation history
+    for msg in st.session_state.kisan_chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Determine user query
+    chat_input_val = st.chat_input(t("chat_placeholder", lang), key="kisan_chat_input")
+    user_query = None
+    if chat_input_val:
+        user_query = chat_input_val.strip()
+    elif selected_quick_pill and st.session_state.get("last_handled_pill") != selected_quick_pill:
+        user_query = selected_quick_pill.strip()
+        st.session_state["last_handled_pill"] = selected_quick_pill
+
+    if user_query:
+        st.session_state.kisan_chat_messages.append({"role": "user", "content": user_query})
+        with st.chat_message("user"):
+            st.markdown(user_query)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Kisan Mitra is checking the field satellite & weather dossier..."):
+                reply = chat_with_kisan_mitra(
+                    st.session_state.kisan_chat_messages,
+                    dossier=dossier,
+                    stats=stats,
+                    lang=lang,
+                )
+            st.markdown(reply)
+            st.session_state.kisan_chat_messages.append({"role": "assistant", "content": reply})
+
+
 st.set_page_config(
     page_title="CropScope · Watched",
     page_icon="🛰️",
@@ -1248,6 +1325,17 @@ st.markdown(
         border-bottom: 2px solid var(--signal) !important;
         font-weight: 600 !important;
         background: rgba(255, 106, 26, 0.08) !important;
+      }
+
+      /* Chatbot styling */
+      div[data-testid="stChatMessage"] {
+        background-color: var(--ink-1) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 0px !important;
+        margin-bottom: 8px !important;
+      }
+      div[data-testid="stChatInput"] {
+        border-radius: 0px !important;
       }
 
       /* Watched.earth Hero Section */
@@ -1465,6 +1553,7 @@ if analyze_live or use_saved:
         with suggestion_slot.container():
             show_suggestions(outcome)
             show_export_section(outcome)
+            show_kisan_mitra_chat(outcome)
 elif st.session_state.get("analysis_outcome"):
     outcome = st.session_state.analysis_outcome
     if current_request and (outcome.request.crop != current_request.crop or outcome.request.growth_stage != current_request.growth_stage):
@@ -1473,3 +1562,4 @@ elif st.session_state.get("analysis_outcome"):
     show_satellite_state(outcome.satellite)
     show_suggestions(outcome)
     show_export_section(outcome)
+    show_kisan_mitra_chat(outcome)

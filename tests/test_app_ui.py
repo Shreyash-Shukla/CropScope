@@ -42,6 +42,24 @@ class AppUITests(unittest.TestCase):
         lang_sel.select("हिन्दी (Hindi)").run()
         self.assertEqual(at.session_state["selected_language"], "hi")
 
+    def test_kisan_mitra_chat_interaction(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=20)
+        at.run()
+        at.radio[0].set_value("Use sample preset").run()
+        at.selectbox(key="crop_select").select("Wheat").run()
+        at.selectbox(key="growth_stage_select").select("Vegetative").run()
+        at.button[1].click().run()
+        self.assertIn("kisan_chat_messages", at.session_state)
+        pills = at.pills(key="kisan_quick_pills")
+        self.assertIsNotNone(pills)
+        self.assertGreater(len(pills.options), 0)
+        at.chat_input(key="kisan_chat_input").set_value("Will it rain?").run()
+        self.assertGreaterEqual(len(at.session_state["kisan_chat_messages"]), 2)
+        self.assertEqual(at.session_state["kisan_chat_messages"][0]["role"], "user")
+        self.assertEqual(at.session_state["kisan_chat_messages"][0]["content"], "Will it rain?")
+        self.assertEqual(at.session_state["kisan_chat_messages"][1]["role"], "assistant")
+        self.assertTrue(len(at.session_state["kisan_chat_messages"][1]["content"]) > 0)
+
 
 if __name__ == "__main__":
     unittest.main()
