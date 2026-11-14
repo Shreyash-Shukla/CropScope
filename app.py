@@ -20,6 +20,7 @@ from agronomy import (
 )
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
+from globe import build_globe_html, is_location_sunlit
 from location import (
     LocationError,
     SAMPLE_AREA,
@@ -148,7 +149,7 @@ def search_location_area() -> tuple[AnalysisArea | None, str | None]:
         return None, str(exc)
 
     st.caption(f"Area extent: **{area.formatted_area()}**")
-    preview_area(area)
+    preview_area(area, location_title=match["label"])
     return area, None
 
 
@@ -217,7 +218,7 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
             return None, str(exc)
 
         st.caption(f"Area extent: **{area.formatted_area()}** (Center: {lat:.5f}°, {lon:.5f}°)")
-        preview_area(area)
+        preview_area(area, location_title=f"Field ({lat:.4f}°, {lon:.4f}°)")
         return area, None
     else:
         st.write("Enter the rectangle edges in decimal degrees. West and east must stay on the same side of the 180° meridian.")
@@ -265,7 +266,7 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
         except LocationError as exc:
             return None, str(exc)
         st.caption(f"Area extent: **{area.formatted_area()}**")
-        preview_area(area)
+        preview_area(area, location_title="Custom Coordinate Boundary")
         return area, None
 
 
@@ -355,30 +356,44 @@ def my_location_area() -> tuple[AnalysisArea | None, str | None]:
         return None, str(exc)
 
     st.caption(f"Area extent: **{area.formatted_area()}**")
-    preview_area(area)
+    preview_area(area, location_title=label)
     return area, None
 
 
-def preview_area(area: AnalysisArea) -> None:
-    preview = folium.Map(location=list(area.center), zoom_start=14, control_scale=True, tiles=None)
-    folium.Rectangle(
-        bounds=[[area.south, area.west], [area.north, area.east]],
-        color="#15803d",
-        fill=True,
-        fill_opacity=0.16,
-    ).add_to(preview)
-    add_map_layers(preview)
-    preview.fit_bounds([[area.south, area.west], [area.north, area.east]])
-    preview_key = f"area_preview_{area.south:.4f}_{area.west:.4f}_{area.north:.4f}_{area.east:.4f}"
-    st_folium(
-        preview,
-        key=preview_key,
-        height=320,
-        use_container_width=True,
-        center=list(area.center),
-        zoom=14,
-        returned_objects=[],
-    )
+def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> None:
+    lat, lon = area.center
+    is_day, elev = is_location_sunlit(lat, lon)
+    sun_badge = "☀️ Sunlit (Daytime)" if is_day else "🌙 In Shadow (Night)"
+
+    view_tab1, view_tab2 = st.tabs(["🛰️ 3D Real-Time Orbital Globe", "🗺️ 2D High-Res Field Map"])
+    with view_tab1:
+        st.caption(
+            f"**Real-time solar terminator & satellite orbital view** · "
+            f"Field center: `{lat:.5f}°, {lon:.5f}°` · Solar status: **{sun_badge}** ({elev:+.1f}° elevation)"
+        )
+        globe_html = build_globe_html(lat, lon, location_title, height=450)
+        st.components.v1.html(globe_html, height=465)
+
+    with view_tab2:
+        preview = folium.Map(location=list(area.center), zoom_start=14, control_scale=True, tiles=None)
+        folium.Rectangle(
+            bounds=[[area.south, area.west], [area.north, area.east]],
+            color="#10b981",
+            fill=True,
+            fill_opacity=0.18,
+        ).add_to(preview)
+        add_map_layers(preview)
+        preview.fit_bounds([[area.south, area.west], [area.north, area.east]])
+        preview_key = f"area_preview_{area.south:.4f}_{area.west:.4f}_{area.north:.4f}_{area.east:.4f}"
+        st_folium(
+            preview,
+            key=preview_key,
+            height=340,
+            use_container_width=True,
+            center=list(area.center),
+            zoom=14,
+            returned_objects=[],
+        )
 
 
 def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
@@ -630,9 +645,78 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
 
 
-st.set_page_config(page_title="CropScope", page_icon="🌱", layout="wide")
-st.title("CropScope")
-st.write("Select an agricultural area to see its forecast weather, a recent Sentinel-2 vegetation observation, and evidence-backed checks. The outlined rectangle is an analysis area, not a surveyed field boundary.")
+st.set_page_config(
+    page_title="CropScope · Orbital Agricultural Intelligence",
+    page_icon="🛰️",
+    layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+      /* Watched.earth Deep-Space Mission Control Aesthetics */
+      .stApp {
+        background: radial-gradient(circle at 50% 0%, #0f172a 0%, #030712 100%);
+        color: #f1f5f9;
+      }
+      .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3.5rem;
+      }
+      /* Sleek Glassmorphism Cards for Metrics */
+      div[data-testid="stMetric"] {
+        background: rgba(15, 23, 42, 0.70);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 12px 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+      }
+      /* Mission Control Hero Badge */
+      .orbital-hero {
+        margin-bottom: 20px;
+      }
+      .orbital-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 12px;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #34d399;
+        margin-bottom: 10px;
+      }
+      .orbital-pill .live-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 10px #10b981;
+      }
+      /* Expander Glass Styling */
+      div[data-testid="stExpander"] {
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+      }
+    </style>
+    <div class="orbital-hero">
+      <div class="orbital-pill"><span class="live-indicator"></span> Real-Time Orbital Tracking & Sentinel-2 Intelligence</div>
+      <h1 style="margin: 0; font-size: 2.3rem; font-weight: 700; background: linear-gradient(135deg, #f8fafc 0%, #cbd5e1 50%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">CropScope</h1>
+      <p style="color: #94a3b8; font-size: 15px; margin-top: 6px;">
+        Track real-time Earth solar terminator, Sentinel-2 multi-spectral vegetation passes, and agro-climatic water balance for any agricultural field on Earth.
+      </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 mode = st.radio(
     "Choose the analysis area",
@@ -659,7 +743,7 @@ else:
     )
     st.caption(f"Preset loaded: **{preset_name}**. You can also freely draw or enter coordinates anywhere.")
     area, location_error = SAMPLE_PRESETS[preset_name], None
-    preview_area(area)
+    preview_area(area, location_title=preset_name)
 
 if location_error:
     st.warning(location_error)
