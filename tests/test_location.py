@@ -11,6 +11,7 @@ from location import (
     area_to_geojson,
     generate_area_geojson_str,
     get_ip_location,
+    parse_boundary_string,
     parse_coordinate_string,
     rectangle_from_geojson,
     search_locations,
@@ -127,6 +128,50 @@ class RectangleSelectionTests(unittest.TestCase):
             parse_coordinate_string("invalid coordinates")
         with self.assertRaises(LocationError):
             parse_coordinate_string("100.0, 50.0")
+
+    def test_parse_boundary_string_formats(self):
+        # Labeled formats
+        n, s, w, e = parse_boundary_string("North: 29.752, South: 29.748, West: 77.048, East: 77.052")
+        self.assertAlmostEqual(n, 29.752)
+        self.assertAlmostEqual(s, 29.748)
+        self.assertAlmostEqual(w, 77.048)
+        self.assertAlmostEqual(e, 77.052)
+
+        n, s, w, e = parse_boundary_string("29.752 N, 29.748 S, 77.048 W, 77.052 E")
+        self.assertAlmostEqual(n, 29.752)
+        self.assertAlmostEqual(s, 29.748)
+        self.assertAlmostEqual(w, 77.048)
+        self.assertAlmostEqual(e, 77.052)
+
+        # UI order: North, South, West, East
+        n, s, w, e = parse_boundary_string("29.752, 29.748, 77.048, 77.052")
+        self.assertAlmostEqual(n, 29.752)
+        self.assertAlmostEqual(s, 29.748)
+        self.assertAlmostEqual(w, 77.048)
+        self.assertAlmostEqual(e, 77.052)
+
+        # Leaflet bbox: South, West, North, East
+        n, s, w, e = parse_boundary_string("29.748, 77.048, 29.752, 77.052")
+        self.assertAlmostEqual(n, 29.752)
+        self.assertAlmostEqual(s, 29.748)
+        self.assertAlmostEqual(w, 77.048)
+        self.assertAlmostEqual(e, 77.052)
+
+        # Polygon coordinates
+        poly_str = "[[77.048, 29.748], [77.052, 29.748], [77.052, 29.752], [77.048, 29.752]]"
+        n, s, w, e = parse_boundary_string(poly_str)
+        self.assertAlmostEqual(n, 29.752)
+        self.assertAlmostEqual(s, 29.748)
+        self.assertAlmostEqual(w, 77.048)
+        self.assertAlmostEqual(e, 77.052)
+
+        # Invalid formats and out of bounds
+        with self.assertRaises(LocationError):
+            parse_boundary_string("")
+        with self.assertRaises(LocationError):
+            parse_boundary_string("29.752, 77.048")
+        with self.assertRaises(LocationError):
+            parse_boundary_string("195.0, 29.748, 77.048, 77.052")
 
     @patch("urllib.request.urlopen")
     def test_get_ip_location_success(self, mock_urlopen):

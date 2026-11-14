@@ -189,6 +189,92 @@ def parse_coordinate_string(coord_str: str) -> tuple[float, float]:
     raise LocationError("Could not recognize coordinates. Examples: '29.7495, 77.0502' or '48.25 N, 1.70 E'.")
 
 
+def parse_boundary_string(bound_str: str) -> tuple[float, float, float, float]:
+    """Parse four boundary coordinates from a text string.
+
+    Accepts:
+    - Labeled format: 'N: 29.752, S: 29.748, W: 77.048, E: 77.052' or '29.752 N, 29.748 S, 77.048 W, 77.052 E'
+    - Four numbers: UI order 'North, South, West, East' (e.g. '29.752, 29.748, 77.048, 77.052')
+      or standard bounding box formats.
+    - GeoJSON polygon coordinates (e.g. '[[77.048, 29.748], ...]')
+
+    Returns (north, south, west, east) as floats or raises LocationError.
+    """
+    if not bound_str or not bound_str.strip():
+        raise LocationError("Enter boundary coordinates, e.g. '29.752, 29.748, 77.048, 77.052'.")
+
+    text = bound_str.strip()
+
+    # 1. Labeled format with N, S, W, E
+    labeled = {}
+    for direction in ["north", "south", "west", "east"]:
+        m = re.search(rf"\b{direction}\s*[:=]?\s*([+-]?\d+(?:\.\d+)?)", text, re.IGNORECASE)
+        if m:
+            labeled[direction[0].upper()] = float(m.group(1))
+
+    if len(labeled) < 4:
+        for d in ["N", "S", "W", "E"]:
+            if d not in labeled:
+                m = re.search(rf"\b{d}\s*[:=]\s*([+-]?\d+(?:\.\d+)?)", text, re.IGNORECASE)
+                if not m:
+                    m = re.search(rf"([+-]?\d+(?:\.\d+)?)\s*°?\s*{d}\b", text, re.IGNORECASE)
+                if m:
+                    labeled[d] = float(m.group(1))
+
+    if len(labeled) == 4:
+        north, south, west, east = labeled["N"], labeled["S"], labeled["W"], labeled["E"]
+    else:
+        # Extract numbers
+        numbers = [float(x) for x in re.findall(r"[+-]?\d+(?:\.\d+)?", text)]
+
+        if len(numbers) == 4:
+            n1, n2, n3, n4 = numbers
+            diff_adj = max(abs(n1 - n2), abs(n3 - n4))
+            diff_alt = max(abs(n1 - n3), abs(n2 - n4))
+
+            if diff_alt < diff_adj:
+                # Alternating pairs: (n1, n3) and (n2, n4)
+                if abs(n1) > 90 or abs(n3) > 90:
+                    west, east = min(n1, n3), max(n1, n3)
+                    south, north = min(n2, n4), max(n2, n4)
+                elif abs(n2) > 90 or abs(n4) > 90:
+                    south, north = min(n1, n3), max(n1, n3)
+                    west, east = min(n2, n4), max(n2, n4)
+                else:
+                    south, north = min(n1, n3), max(n1, n3)
+                    west, east = min(n2, n4), max(n2, n4)
+            else:
+                # Adjacent pairs: (n1, n2) and (n3, n4)
+                south, north = min(n1, n2), max(n1, n2)
+                west, east = min(n3, n4), max(n3, n4)
+        elif len(numbers) >= 8:
+            pairs_x = numbers[0::2]
+            pairs_y = numbers[1::2]
+            if any(abs(x) > 90 for x in pairs_x):
+                lons, lats = pairs_x, pairs_y
+            elif any(abs(y) > 90 for y in pairs_y):
+                lats, lons = pairs_x, pairs_y
+            else:
+                lons, lats = pairs_x, pairs_y
+            north, south, west, east = max(lats), min(lats), min(lons), max(lons)
+        else:
+            raise LocationError(
+                f"Could not parse 4 boundary coordinates from '{bound_str}'. "
+                "Provide North, South, West, East (e.g. '29.752, 29.748, 77.048, 77.052') or labeled 'N:..., S:..., W:..., E:...'"
+            )
+
+    if not (-90.0 <= south <= 90.0 and -90.0 <= north <= 90.0):
+        raise LocationError(f"Latitude must be between -90 and 90 degrees (got South={south}, North={north}).")
+    if not (-180.0 <= west <= 180.0 and -180.0 <= east <= 180.0):
+        raise LocationError(f"Longitude must be between -180 and 180 degrees (got West={west}, East={east}).")
+    if south >= north:
+        raise LocationError(f"South latitude ({south}) must be strictly less than North latitude ({north}).")
+    if west >= east:
+        raise LocationError(f"West longitude ({west}) must be strictly less than East longitude ({east}).")
+
+    return north, south, west, east
+
+
 def get_ip_location(timeout: float = 3.0) -> tuple[float, float, str]:
     """Detect approximate location from public IP geolocation.
 

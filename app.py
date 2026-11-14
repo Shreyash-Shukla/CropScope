@@ -28,6 +28,7 @@ from location import (
     area_from_coordinates,
     generate_area_geojson_str,
     get_ip_location,
+    parse_boundary_string,
     parse_coordinate_string,
     rectangle_from_geojson,
     search_locations,
@@ -235,13 +236,47 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
         return area, None
     else:
         st.write("Enter the rectangle edges in decimal degrees. West and east must stay on the same side of the 180° meridian.")
+
+        if "coord_north" not in st.session_state:
+            st.session_state["coord_north"] = float(SAMPLE_AREA.north)
+        if "coord_south" not in st.session_state:
+            st.session_state["coord_south"] = float(SAMPLE_AREA.south)
+        if "coord_west" not in st.session_state:
+            st.session_state["coord_west"] = float(SAMPLE_AREA.west)
+        if "coord_east" not in st.session_state:
+            st.session_state["coord_east"] = float(SAMPLE_AREA.east)
+
+        def _sync_pasted_boundary() -> None:
+            raw = st.session_state.get("coord_boundary_paste_input", "").strip()
+            if raw:
+                try:
+                    p_north, p_south, p_west, p_east = parse_boundary_string(raw)
+                    st.session_state["coord_north"] = float(p_north)
+                    st.session_state["coord_south"] = float(p_south)
+                    st.session_state["coord_west"] = float(p_west)
+                    st.session_state["coord_east"] = float(p_east)
+                    st.session_state["coord_boundary_paste_error"] = None
+                except LocationError as exc:
+                    st.session_state["coord_boundary_paste_error"] = str(exc)
+            else:
+                st.session_state["coord_boundary_paste_error"] = None
+
+        pasted_boundary = st.text_input(
+            "Paste boundary coordinates (optional quick-fill)",
+            placeholder="e.g. 29.752, 29.748, 77.048, 77.052 or N: 29.752, S: 29.748, W: 77.048, E: 77.052",
+            help="Type or paste 4 boundary coordinates (North, South, West, East, or labeled N/S/W/E, or bbox) and press Enter to auto-fill.",
+            key="coord_boundary_paste_input",
+            on_change=_sync_pasted_boundary,
+        )
+        if st.session_state.get("coord_boundary_paste_error"):
+            st.caption(f":warning: {st.session_state['coord_boundary_paste_error']}")
+
         first, second = st.columns(2)
         with first:
             north = st.number_input(
                 "North latitude",
                 min_value=-90.0,
                 max_value=90.0,
-                value=SAMPLE_AREA.north,
                 format="%.6f",
                 step=0.0001,
                 key="coord_north",
@@ -250,7 +285,6 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
                 "South latitude",
                 min_value=-90.0,
                 max_value=90.0,
-                value=SAMPLE_AREA.south,
                 format="%.6f",
                 step=0.0001,
                 key="coord_south",
@@ -260,7 +294,6 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
                 "West longitude",
                 min_value=-180.0,
                 max_value=180.0,
-                value=SAMPLE_AREA.west,
                 format="%.6f",
                 step=0.0001,
                 key="coord_west",
@@ -269,7 +302,6 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
                 "East longitude",
                 min_value=-180.0,
                 max_value=180.0,
-                value=SAMPLE_AREA.east,
                 format="%.6f",
                 step=0.0001,
                 key="coord_east",
