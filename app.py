@@ -21,6 +21,13 @@ from agronomy import (
 from analysis import AnalysisOutcome, SourceState, analyze as run_analysis
 from cache import CacheStore
 from globe import build_globe_html, is_location_sunlit
+from i18n import (
+    SUPPORTED_LANGUAGES,
+    get_code_from_label,
+    get_language_names,
+    get_quick_prompts,
+    t,
+)
 import location
 if not hasattr(location, "parse_boundary_string"):
     import importlib
@@ -1291,14 +1298,40 @@ st.markdown(
         margin: 0;
       }
     </style>
-    <div class="hero-container">
-      <div class="hero-kicker"><span class="hero-kicker-dot"></span> 01 / ORBITAL SENSING CONSOLE · SGP4 CELESTRAK</div>
-      <div class="hero-title">Something watched <span class="hero-serif">your crops</span> this week.</div>
-      <div class="hero-sub">Enter any field or farm location on Earth. See every Sentinel-2 multispectral pass, NDVI canopy health, and 7-day agro-climatic water balance.</div>
-    </div>
     """,
     unsafe_allow_html=True,
 )
+
+hero_col, lang_col = st.columns([3, 1])
+with hero_col:
+    st.markdown(
+        """
+        <div class="hero-container" style="border-bottom: none; margin-bottom: 0px; padding-bottom: 0px;">
+          <div class="hero-kicker"><span class="hero-kicker-dot"></span> 01 / ORBITAL SENSING CONSOLE · SGP4 CELESTRAK</div>
+          <div class="hero-title">Something watched <span class="hero-serif">your crops</span> this week.</div>
+          <div class="hero-sub">Enter any field or farm location on Earth. See every Sentinel-2 multispectral pass, NDVI canopy health, and 7-day agro-climatic water balance.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with lang_col:
+    lang_labels = get_language_names()
+    default_lang = st.session_state.get("selected_language", "en")
+    default_label = SUPPORTED_LANGUAGES.get(default_lang, {}).get("label", "English")
+    try:
+        default_idx = lang_labels.index(default_label)
+    except ValueError:
+        default_idx = 0
+    selected_label = st.selectbox(
+        "🌐 Language / भाषा",
+        lang_labels,
+        index=default_idx,
+        key="language_selector",
+        help="Select language for Kisan Mitra AI field advisory and explanations.",
+    )
+    st.session_state["selected_language"] = get_code_from_label(selected_label)
+
+st.markdown('<div style="border-bottom: 1px solid var(--line); margin-bottom: 24px;"></div>', unsafe_allow_html=True)
 
 mode = st.radio(
     "Choose the analysis area",

@@ -33,6 +33,15 @@ class AppUITests(unittest.TestCase):
         at.pills[0].set_value("🌾 Karnal, India").run()
         self.assertEqual(at.text_input(key="location_search_input").value, "Karnal, Haryana, India")
 
+    def test_language_selector_updates_session_state(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        lang_sel = at.selectbox(key="language_selector")
+        self.assertEqual(lang_sel.value, "English")
+        self.assertEqual(at.session_state["selected_language"], "en")
+        lang_sel.select("हिन्दी (Hindi)").run()
+        self.assertEqual(at.session_state["selected_language"], "hi")
+
 
 if __name__ == "__main__":
     unittest.main()
