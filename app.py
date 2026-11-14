@@ -1114,12 +1114,7 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
         label_visibility="collapsed",
     )
 
-    # Render conversation history
-    for msg in st.session_state.kisan_chat_messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    # Determine user query
+    # Determine user query before rendering the viewport
     chat_input_val = st.chat_input(t("chat_placeholder", lang), key="kisan_chat_input")
     user_query = None
     if chat_input_val:
@@ -1128,21 +1123,39 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
         user_query = selected_quick_pill.strip()
         st.session_state["last_handled_pill"] = selected_quick_pill
 
-    if user_query:
-        st.session_state.kisan_chat_messages.append({"role": "user", "content": user_query})
-        with st.chat_message("user"):
-            st.markdown(user_query)
+    # Dedicated smooth-scrolling chat viewport with fixed height
+    chat_viewport = st.container(height=440)
+    with chat_viewport:
+        if not st.session_state.kisan_chat_messages and not user_query:
+            st.markdown(
+                f"""
+                <div style="text-align: center; padding: 40px 16px; color: var(--bone-3); font-family: var(--font-mono); font-size: 11.5px; border: 1px dashed var(--line); margin: 12px 0;">
+                  🌾 <strong style="color: var(--bone);">{t('kisan_mitra_title', lang)}</strong><br><br>
+                  {t('kisan_mitra_caption', lang)}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-        with st.chat_message("assistant"):
-            with st.spinner("Kisan Mitra is checking the field satellite & weather dossier..."):
-                reply = chat_with_kisan_mitra(
-                    st.session_state.kisan_chat_messages,
-                    dossier=dossier,
-                    stats=stats,
-                    lang=lang,
-                )
-            st.markdown(reply)
-            st.session_state.kisan_chat_messages.append({"role": "assistant", "content": reply})
+        for msg in st.session_state.kisan_chat_messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        if user_query:
+            st.session_state.kisan_chat_messages.append({"role": "user", "content": user_query})
+            with st.chat_message("user"):
+                st.markdown(user_query)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Kisan Mitra is checking the field satellite & weather dossier..."):
+                    reply = chat_with_kisan_mitra(
+                        st.session_state.kisan_chat_messages,
+                        dossier=dossier,
+                        stats=stats,
+                        lang=lang,
+                    )
+                st.markdown(reply)
+                st.session_state.kisan_chat_messages.append({"role": "assistant", "content": reply})
 
 
 st.set_page_config(
@@ -1327,15 +1340,42 @@ st.markdown(
         background: rgba(255, 106, 26, 0.08) !important;
       }
 
-      /* Chatbot styling */
+      /* Chatbot smooth scroll styling */
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"]) {
+        scroll-behavior: smooth !important;
+        -webkit-overflow-scrolling: touch !important;
+        border: 1px solid var(--line) !important;
+        background-color: var(--ink-0) !important;
+        padding: 12px 14px !important;
+      }
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"])::-webkit-scrollbar {
+        width: 6px;
+      }
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"])::-webkit-scrollbar-track {
+        background: var(--ink-1);
+      }
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"])::-webkit-scrollbar-thumb {
+        background: var(--line-strong);
+      }
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"])::-webkit-scrollbar-thumb:hover {
+        background: var(--signal);
+      }
       div[data-testid="stChatMessage"] {
         background-color: var(--ink-1) !important;
         border: 1px solid var(--line) !important;
         border-radius: 0px !important;
-        margin-bottom: 8px !important;
+        margin-bottom: 10px !important;
+        padding: 12px 14px !important;
+        font-family: var(--font-sans) !important;
+        font-size: 13.5px !important;
+        line-height: 1.5 !important;
+      }
+      div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li {
+        color: var(--bone) !important;
       }
       div[data-testid="stChatInput"] {
         border-radius: 0px !important;
+        margin-top: 8px !important;
       }
 
       /* Watched.earth Hero Section */
