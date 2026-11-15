@@ -750,6 +750,16 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       return tex;
     }
 
+    function createFallbackDataTexture() {
+      const c = document.createElement('canvas');
+      c.width = 1024; c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#00ff00'; ctx.fillRect(0, 0, 1024, 512);
+      ctx.fillStyle = '#200000';
+      ctx.beginPath(); ctx.ellipse(540, 240, 140, 100, 0, 0, Math.PI * 2); ctx.fill();
+      return new THREE.CanvasTexture(c);
+    }
+
     const maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 8;
 
     const dayDataUrl = '__DAY_TEXTURE_DATA_URL__';
@@ -763,6 +773,17 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     dayTexture.minFilter = THREE.LinearMipmapLinearFilter;
     dayTexture.magFilter = THREE.LinearFilter;
     dayTexture.generateMipmaps = true;
+
+    const dataDataUrl = '__DATA_TEXTURE_DATA_URL__';
+    const dataTexture = dataDataUrl
+      ? textureLoader.load(dataDataUrl)
+      : createFallbackDataTexture();
+    dataTexture.wrapS = THREE.ClampToEdgeWrapping;
+    dataTexture.wrapT = THREE.ClampToEdgeWrapping;
+    dataTexture.anisotropy = maxAniso;
+    dataTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    dataTexture.magFilter = THREE.LinearFilter;
+    dataTexture.generateMipmaps = true;
 
     const nightDataUrl = '__NIGHT_TEXTURE_DATA_URL__';
     const nightTexture = nightDataUrl
@@ -782,10 +803,54 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       : createFallbackTexture(false);
     cloudsTexture.wrapS = THREE.RepeatWrapping;
     cloudsTexture.wrapT = THREE.ClampToEdgeWrapping;
-    cloudsTexture.anisotropy = Math.min(maxAniso, 4);
+    cloudsTexture.anisotropy = Math.min(maxAniso, 8);
     cloudsTexture.minFilter = THREE.LinearMipmapLinearFilter;
     cloudsTexture.magFilter = THREE.LinearFilter;
     cloudsTexture.generateMipmaps = true;
+
+    // ── Regional NASA GIBS 500m Context Basemap Loader ──────────────────────
+    const halfKm = 420.0;
+    const latSpan = halfKm / 111.0;
+    const cosTgt = Math.max(0.08, Math.cos(targetLat * DEG));
+    const lonSpan = halfKm / (111.0 * cosTgt);
+    const minLat = Math.max(-88.0, targetLat - latSpan);
+    const maxLat = Math.min(88.0, targetLat + latSpan);
+    const minLon = targetLon - lonSpan;
+    const maxLon = targetLon + lonSpan;
+
+    const ctxU = 0.5 + targetLon / 360.0;
+    const ctxV = 0.5 + targetLat / 180.0;
+    const ctxW = Math.max(0.001, (maxLon - minLon) / 360.0);
+    const ctxH = Math.max(0.001, (maxLat - minLat) / 180.0);
+    const ctxUvVec = new THREE.Vector4(ctxU, ctxV, ctxW, ctxH);
+
+    const gibsWmsUrl = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=BlueMarble_NextGeneration&STYLES=&FORMAT=image/jpeg&CRS=EPSG:4326&BBOX=' +
+      minLat.toFixed(4) + ',' + minLon.toFixed(4) + ',' + maxLat.toFixed(4) + ',' + maxLon.toFixed(4) +
+      '&WIDTH=1024&HEIGHT=1024&TIME=2004-08-01';
+
+    let ctxLoaded = false;
+    let ctxFade = 0.0;
+
+    const ctxLoader = new THREE.TextureLoader();
+    ctxLoader.setCrossOrigin('anonymous');
+    ctxLoader.load(
+      gibsWmsUrl,
+      function(tex) {
+        tex.encoding = THREE.sRGBEncoding;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.anisotropy = maxAniso;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        earthUniforms.uCtxMap.value = tex;
+        ctxLoaded = true;
+      },
+      undefined,
+      function() {
+        ctxLoaded = false; // Seamless fallback to 8K global texture
+      }
+    );
 
     // ── 5. Fixed Earth Mesh & Photoreal Shaders ──────────────────────────────
     const initialSun = sunDirectionWorld(Date.now());
@@ -803,6 +868,13 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     const earthFragmentShader = `
       uniform sampler2D uDay;
       uniform sampler2D uNight;
+      uniform sampler2D uData;
+      uniform vec2 uDataTexel;
+      uniform float uBump;
+      uniform sampler2D uCtxMap;
+      uniform vec4 uCtxUv;
+      uniform float uCtxOn;
+
       uniform vec3 uSunDir;
       uniform vec3 uCityColor;
       uniform vec3 uTwilightColor;
@@ -814,6 +886,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       varying vec2 vUv;
 
       #define PI 3.141592653589793
+      #define TWO_PI 6.283185307179586
       float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
       float sat01(float x) { return clamp(x, 0.0, 1.0); }
       float gauss(float x) { return exp(-x * x); }
@@ -827,32 +900,80 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
         return mix(c, sea, ocean);
       }
 
+      vec2 patchCoord(vec2 uv, vec4 b) {
+        float dx = uv.x - b.x;
+        dx -= floor(dx + 0.5);
+        return vec2(0.5 + dx / b.z, 0.5 + (uv.y - b.y) / b.w);
+      }
+
+      float patchMask(vec2 p, vec2 f) {
+        vec2 a = smoothstep(vec2(0.0), f, p) * smoothstep(vec2(0.0), f, 1.0 - p);
+        return a.x * a.y;
+      }
+
       void main() {
         vec3 N = normalize(vPos);
         vec3 V = normalize(cameraPosition - vPos);
         vec3 L = normalize(uSunDir);
         float NdL = dot(N, L);
 
-        // Day map sample
-        vec3 dayTex = texture2D(uDay, vUv).rgb;
-        float ocean = sat01((dayTex.b * 1.25 - dayTex.r * 1.05) * 2.2);
+        // High-precision NASA data map: G = ocean mask, R = elevation
+        vec4 data = texture2D(uData, vUv);
+        float ocean = smoothstep(0.35, 0.65, data.g);
+        float land = 1.0 - ocean;
 
-        // Micro-topographic relief on land
-        vec2 dUv = vec2(1.0 / 4096.0, 1.0 / 2048.0);
-        float hC = luma(dayTex);
-        float hR = luma(texture2D(uDay, vUv + vec2(dUv.x, 0.0)).rgb);
-        float hT = luma(texture2D(uDay, vUv + vec2(0.0, dUv.y)).rgb);
-        vec3 bump = vec3((hR - hC) * 1.5, (hT - hC) * 1.5, 0.0) * (1.0 - ocean);
-        vec3 effN = normalize(N + bump * 0.85);
-        float effNdL = dot(effN, L);
+        // Base 8K Day map sample
+        vec3 dayTex = texture2D(uDay, vUv).rgb;
+
+        // Regional high-resolution context patch (NASA 500m Blue Marble)
+        if (uCtxOn > 0.001) {
+          vec2 p = patchCoord(vUv, uCtxUv);
+          if (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) {
+            float mask = patchMask(p, vec2(0.12)) * uCtxOn;
+            vec2 t = vec2(p.x, 1.0 - p.y);
+            vec3 ctxCol = texture2D(uCtxMap, t).rgb;
+            dayTex = mix(dayTex, ctxCol, mask * land);
+          }
+        }
+
+        // Adaptive high-frequency detail sharpening on zoom (anti-blur)
+        float camDist = length(cameraPosition);
+        float zoomCloseness = sat01((2.0 - camDist) / 0.85);
+        if (zoomCloseness > 0.01) {
+          vec2 texel = vec2(1.0 / 8192.0, 1.0 / 4096.0);
+          vec3 cN = texture2D(uDay, vUv + vec2(0.0, texel.y)).rgb;
+          vec3 cS = texture2D(uDay, vUv - vec2(0.0, texel.y)).rgb;
+          vec3 cE = texture2D(uDay, vUv + vec2(texel.x, 0.0)).rgb;
+          vec3 cW = texture2D(uDay, vUv - vec2(texel.x, 0.0)).rgb;
+          vec3 highPass = dayTex - (cN + cS + cE + cW) * 0.25;
+          dayTex = clamp(dayTex + highPass * (zoomCloseness * 0.40), 0.0, 1.0);
+        }
+
+        // Topographic relief hill-shading from NASA SRTM elevation (R channel)
+        vec2 du = vec2(uDataTexel.x * 1.5, 0.0);
+        vec2 dv = vec2(0.0, uDataTexel.y * 1.5);
+        float hE = texture2D(uData, vUv + du).r;
+        float hW = texture2D(uData, vUv - du).r;
+        float hN = texture2D(uData, vUv + dv).r;
+        float hS = texture2D(uData, vUv - dv).r;
+
+        vec3 E = vec3(N.z, 0.0, -N.x);
+        float elen = length(E);
+        E = elen < 1e-6 ? vec3(0.0, 0.0, -1.0) : E / elen;
+        vec3 Nn = cross(N, E);
+        float cosLat = max(length(N.xz), 0.04);
+        vec2 slope = vec2((hE - hW) / (2.0 * du.x * TWO_PI * cosLat), (hN - hS) / (2.0 * dv.y * PI));
+        float reliefMask = land * smoothstep(0.02, 0.12, cosLat);
+        vec3 Nb = normalize(N - uBump * reliefMask * (slope.x * E + slope.y * Nn));
+        float relief = clamp(1.0 + (dot(Nb, L) - NdL) * 2.2, 0.62, 1.32);
 
         vec3 albedo = pow(gradeDay(dayTex, ocean), vec3(1.12)) * 1.06;
-        float dayMix = smoothstep(-0.05, 0.09, effNdL);
-        float lambert = sat01((effNdL + 0.04) / 1.04);
-        vec3 day = albedo * uSunIntensity * lambert;
+        float dayMix = smoothstep(-0.05, 0.09, NdL);
+        float lambert = sat01((NdL + 0.04) / 1.04);
+        vec3 day = albedo * uSunIntensity * lambert * mix(1.0, relief, smoothstep(0.0, 0.08, NdL));
 
         // Low sun reddening at twilight
-        float lowSun = gauss((effNdL - 0.03) / 0.11);
+        float lowSun = gauss((NdL - 0.03) / 0.11);
         day *= mix(vec3(1.0), vec3(1.0, 0.74, 0.55), lowSun * 0.45);
 
         // Ocean specular glint (Blinn-Phong)
@@ -902,6 +1023,12 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     const earthUniforms = {
       uDay: { value: dayTexture },
       uNight: { value: nightTexture },
+      uData: { value: dataTexture },
+      uDataTexel: { value: new THREE.Vector2(1.0 / 4096.0, 1.0 / 2048.0) },
+      uBump: { value: 0.012 },
+      uCtxMap: { value: dayTexture },
+      uCtxUv: { value: ctxUvVec },
+      uCtxOn: { value: 0.0 },
       uSunDir: { value: initialSun },
       uCityColor: { value: new THREE.Color(0xffb070) },      // Sodium amber
       uTwilightColor: { value: new THREE.Color(0xff9a5a) },  // Warm terminator
@@ -915,8 +1042,8 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       vertexShader: earthVertexShader,
       fragmentShader: earthFragmentShader
     });
-    // SphereGeometry: 1.0 unit radius, Earth is FIXED in world space
-    const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 160, 80), earthMaterial);
+    // SphereGeometry: 220x110 subdivisions for sharp, ultra-smooth curvature
+    const earthMesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 220, 110), earthMaterial);
     scene.add(earthMesh);
 
     // ── 6. Cloud Shell (radius 1.006) ───────────────────────────────────────
@@ -993,7 +1120,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       transparent: true,
       depthWrite: false
     });
-    const cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(1.006, 160, 80), cloudMaterial);
+    const cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(1.006, 220, 110), cloudMaterial);
     scene.add(cloudMesh);
 
     // ── 7. Exponential Rayleigh Atmosphere Rim (radius 1.025) ───────────────
@@ -1062,7 +1189,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       transparent: true,
       depthWrite: false
     });
-    const atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(1.025, 96, 48), atmoMaterial);
+    const atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(1.025, 128, 64), atmoMaterial);
     scene.add(atmoMesh);
 
     // ── 8. Starfield ────────────────────────────────────────────────────────
@@ -1440,6 +1567,12 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
 
       updateEphemerisUI(simTime);
 
+      // Smooth fade-in of regional high-resolution context patch
+      if (ctxLoaded && ctxFade < 1.0) {
+        ctxFade = Math.min(1.0, ctxFade + dtSec * 1.5);
+        earthUniforms.uCtxOn.value = ctxFade;
+      }
+
       // Smooth Great-Circle Camera Flight or Direct Manipulation
       if (flight.active) {
         const rawT = Math.min(1.0, (nowPerf - flight.startTime) / flight.duration);
@@ -1492,9 +1625,24 @@ def build_globe_html(
     is_day, elevation = is_location_sunlit(center_lat, center_lon)
     solar_status = "DAYLIGHT" if is_day else "NIGHT SHADOW"
 
-    day_tex_url = _load_texture_data_url("earth-day-4k.webp") or _load_texture_data_url("earth-day-2k.webp")
-    night_tex_url = _load_texture_data_url("earth-night-4k.webp") or _load_texture_data_url("earth-night-2k.webp")
-    clouds_tex_url = _load_texture_data_url("earth-clouds-2k.webp") or _load_texture_data_url("earth-clouds-1k.webp")
+    day_tex_url = (
+        _load_texture_data_url("earth-day-8k.webp")
+        or _load_texture_data_url("earth-day-4k.webp")
+        or _load_texture_data_url("earth-day-2k.webp")
+    )
+    data_tex_url = (
+        _load_texture_data_url("earth-data-4k.webp")
+        or _load_texture_data_url("earth-data-1k.webp")
+    )
+    night_tex_url = (
+        _load_texture_data_url("earth-night-4k.webp")
+        or _load_texture_data_url("earth-night-2k.webp")
+    )
+    clouds_tex_url = (
+        _load_texture_data_url("earth-clouds-2k.webp")
+        or _load_texture_data_url("earth-clouds-4k.webp")
+        or _load_texture_data_url("earth-clouds-1k.webp")
+    )
 
     html = _GLOBE_TEMPLATE
     html = html.replace("__HEIGHT__", str(height))
@@ -1509,7 +1657,10 @@ def build_globe_html(
     html = html.replace("__SUBSOLAR_LAT__", f"{sub_lat:+.1f}")
     html = html.replace("__SUBSOLAR_LON__", f"{sub_lon:+.1f}")
     html = html.replace("__DAY_TEXTURE_DATA_URL__", day_tex_url)
+    html = html.replace("__DATA_TEXTURE_DATA_URL__", data_tex_url)
     html = html.replace("__NIGHT_TEXTURE_DATA_URL__", night_tex_url)
     html = html.replace("__CLOUDS_TEXTURE_DATA_URL__", clouds_tex_url)
+
+    return html
 
     return html

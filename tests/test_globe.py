@@ -117,6 +117,14 @@ class GlobeAstronomicalTests(unittest.TestCase):
         self.assertTrue(clouds_2k_url.startswith("data:image/webp;base64,"))
         self.assertGreater(len(clouds_2k_url), 50000)
 
+        day_8k_url = _load_texture_data_url("earth-day-8k.webp")
+        self.assertTrue(day_8k_url.startswith("data:image/webp;base64,"))
+        self.assertGreater(len(day_8k_url), 1000000)
+
+        data_4k_url = _load_texture_data_url("earth-data-4k.webp")
+        self.assertTrue(data_4k_url.startswith("data:image/webp;base64,"))
+        self.assertGreater(len(data_4k_url), 400000)
+
     def test_build_globe_html_contains_critical_components(self):
         html = build_globe_html(29.748, 77.048, "Karnal Farm", height=500)
         self.assertIn("three.js", html.lower())
@@ -169,6 +177,25 @@ class GlobeAstronomicalTests(unittest.TestCase):
         # 10 px drag at close range moves less than 0.2 degrees on the globe
         drag_10px_close_deg = math.degrees(10.0 * k_close)
         self.assertLess(drag_10px_close_deg, 0.2)
+
+    def test_globe_zoom_detail_and_sharpness_pipeline(self):
+        html = build_globe_html(29.748, 77.048, "Karnal Farm", height=540)
+        # Verify 8K texture and 4K data texture embedding
+        self.assertIn("__DATA_TEXTURE_DATA_URL__" not in html, [True])
+        self.assertIn("dataTexture", html)
+        self.assertIn("uData", html)
+        self.assertIn("uDataTexel", html)
+        self.assertIn("uBump", html)
+        # Verify NASA GIBS regional context basemap loader
+        self.assertIn("uCtxMap", html)
+        self.assertIn("uCtxUv", html)
+        self.assertIn("uCtxOn", html)
+        self.assertIn("BlueMarble_NextGeneration", html)
+        # Verify adaptive unsharp sharpening for zoom detail
+        self.assertIn("zoomCloseness", html)
+        self.assertIn("highPass", html)
+        # Verify high tessellation geometry
+        self.assertIn("220, 110", html)
 
 
 if __name__ == "__main__":
