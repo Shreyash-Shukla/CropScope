@@ -195,6 +195,13 @@ class GlobeAstronomicalTests(unittest.TestCase):
         # Verify high tessellation geometry
         self.assertIn("220, 110", html)
 
+    def test_globe_no_graticule_latitude_longitude_lines(self):
+        html = build_globe_html(29.748, 77.048, "Karnal Farm", height=540)
+        # Verify latitude and longitude grid lines are removed
+        self.assertNotIn("latGrid", html)
+        self.assertNotIn("lonGrid", html)
+        self.assertNotIn("gridLine", html)
+
 
 if __name__ == "__main__":
     unittest.main()

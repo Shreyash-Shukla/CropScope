@@ -940,13 +940,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
         float dusk = gauss((NdL + 0.035) / 0.05);
         col += uTwilightColor * dusk * 0.008;
 
-        // Subtle geographical navigation graticule (30° intervals)
-        float latGrid = abs(fract(vUv.y * 6.0) - 0.5);
-        float lonGrid = abs(fract(vUv.x * 12.0) - 0.5);
-        float gridLine = smoothstep(0.488, 0.496, max(latGrid, lonGrid));
-        float equator = smoothstep(0.003, 0.0, abs(vUv.y - 0.5));
-        col += vec3(0.18, 0.28, 0.38) * (gridLine * 0.10 + equator * 0.15);
-
         gl_FragColor = vec4(col, 1.0);
       }
     `;
