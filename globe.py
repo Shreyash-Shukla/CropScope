@@ -221,6 +221,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       display: block;
       cursor: grab;
       background: var(--ink-0);
+      touch-action: none;
     }
     #canvas-container:active {
       cursor: grabbing;
@@ -475,18 +476,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     renderer.outputEncoding = THREE.sRGBEncoding;
     container.appendChild(renderer.domElement);
 
-    // ── 2. OrbitControls (Smooth Direct Manipulation) ────────────────────────
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.rotateSpeed = 0.38;   // Smooth, non-twitchy rotation
-    controls.zoomSpeed = 0.52;     // Gentle, controlled zoom
-    controls.enablePan = false;    // Keep Earth permanently centered
-    controls.minDistance = 1.25;   // Allow closer inspection of terrain details
-    controls.maxDistance = 5.2;
-    controls.autoRotate = false; // Never fight the user with unprompted spin
-
-    // ── 3. Watched.earth Exact Ephemeris & Geometry Math ────────────────────
+    // ── 2. Watched.earth Exact Ephemeris & Geometry Math ────────────────────
     const DEG = Math.PI / 180.0;
     const RAD = 180.0 / Math.PI;
 
@@ -542,6 +532,197 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
         radius * Math.sin(lat),
         -radius * c * Math.sin(lon)
       );
+    }
+
+    // ── 3. Watched.earth Camera Pose & Direct Manipulation (Replacing OrbitControls) ──
+    // Surface-anchored panning with range-proportional radiansPerPixel ensures
+    // that small mouse movements never cause wild overshooting or high sensitivity.
+    const MIN_RANGE = 0.20; // Near zoom limit (close inspection without clipping)
+    const MAX_RANGE = 4.50; // Far overview limit
+
+    function createPose(latDeg, lonDeg, range, tilt) {
+      const d = latLonToWorld(latDeg, lonDeg, 1.0).normalize();
+      const fwd = new THREE.Vector3(0, 1, 0);
+      fwd.addScaledVector(d, -fwd.dot(d));
+      if (fwd.lengthSq() < 1e-10) fwd.set(0, 0, -1);
+      fwd.normalize();
+      return {
+        d: d,
+        fwd: fwd,
+        r: 1.0,
+        range: range !== undefined ? range : 1.25,
+        tilt: tilt || 0.0
+      };
+    }
+
+    function clonePose(p) {
+      return {
+        d: p.d.clone(),
+        fwd: p.fwd.clone(),
+        r: p.r,
+        range: p.range,
+        tilt: p.tilt
+      };
+    }
+
+    function copyPose(src, dst) {
+      dst.d.copy(src.d);
+      dst.fwd.copy(src.fwd);
+      dst.r = src.r;
+      dst.range = src.range;
+      dst.tilt = src.tilt;
+      return dst;
+    }
+
+    function rotateAbout(v, k, a, out) {
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const kv = k.dot(v);
+      const cx = k.y * v.z - k.z * v.y;
+      const cy = k.z * v.x - k.x * v.z;
+      const cz = k.x * v.y - k.y * v.x;
+      return (out || v).set(
+        v.x * c + cx * s + k.x * kv * (1.0 - c),
+        v.y * c + cy * s + k.y * kv * (1.0 - c),
+        v.z * c + cz * s + k.z * kv * (1.0 - c)
+      );
+    }
+
+    function signedAngle(from, to, axis) {
+      const cx = from.y * to.z - from.z * to.y;
+      const cy = from.z * to.x - from.x * to.z;
+      const cz = from.x * to.y - from.y * to.x;
+      return Math.atan2(cx * axis.x + cy * axis.y + cz * axis.z, from.dot(to));
+    }
+
+    const wrapPi = a => a - 2.0 * Math.PI * Math.floor((a + Math.PI) / (2.0 * Math.PI));
+
+    function orthonormalize(p) {
+      p.d.normalize();
+      p.fwd.addScaledVector(p.d, -p.fwd.dot(p.d));
+      if (p.fwd.lengthSq() < 1e-12) {
+        const east = new THREE.Vector3(p.d.z, 0, -p.d.x);
+        if (east.lengthSq() < 1e-12) east.set(0, 0, -1);
+        east.normalize();
+        p.fwd.crossVectors(p.d, east).normalize();
+      } else {
+        p.fwd.normalize();
+      }
+    }
+
+    function applyPoseToCamera(p, cam) {
+      const outTarget = p.d.clone().multiplyScalar(p.r);
+      const ct = Math.cos(p.tilt);
+      const st = Math.sin(p.tilt);
+      const outPos = outTarget.clone()
+        .addScaledVector(p.d, p.range * ct)
+        .addScaledVector(p.fwd, -p.range * st);
+      const outUp = p.fwd.clone()
+        .multiplyScalar(ct)
+        .addScaledVector(p.d, st)
+        .normalize();
+      cam.position.copy(outPos);
+      cam.up.copy(outUp);
+      cam.lookAt(outTarget);
+    }
+
+    // Radians of arc on the globe per screen pixel at the look-at point:
+    // Panning sensitivity scales strictly with distance from the surface,
+    // so small changes don't fling the globe and manipulation is 1:1 anchored.
+    function radiansPerPixel(pose, fovDeg, heightPx) {
+      return (2.0 * pose.range * Math.tan((fovDeg * DEG) / 2.0)) / Math.max(1.0, heightPx) / Math.max(0.5, pose.r);
+    }
+
+    const controlInput = {
+      panX: 0,
+      panY: 0,
+      turnX: 0,
+      turnY: 0,
+      zoom: 0,
+      dragging: false,
+      lastInputAt: -Infinity,
+      gestureId: 0
+    };
+
+    const controlState = {
+      spin: new THREE.Vector3(),
+      zoomTarget: null
+    };
+
+    function applyControls(pose, input, state, dt, fovDeg, heightPx, northUp, minRange, maxRange) {
+      const floor = Math.max(MIN_RANGE, minRange || MIN_RANGE);
+      const ceil = Math.min(MAX_RANGE, maxRange || MAX_RANGE);
+      let moved = false;
+      const k = radiansPerPixel(pose, fovDeg, heightPx);
+
+      // Pan: move the look-at point along the screen's right / up directions on the sphere
+      if (input.panX !== 0 || input.panY !== 0) {
+        const right = new THREE.Vector3().crossVectors(pose.fwd, pose.d);
+        const t = right.clone().multiplyScalar(-input.panX * k).addScaledVector(pose.fwd, input.panY * k);
+        const angle = t.length();
+        if (angle > 0) {
+          const axis = new THREE.Vector3().crossVectors(pose.d, t).normalize();
+          rotateAbout(pose.d, axis, angle, pose.d);
+          rotateAbout(pose.fwd, axis, angle, pose.fwd);
+          // Exponentially smoothed velocity estimate for inertia
+          const w = Math.min(1.0, dt > 0 ? dt / 0.05 : 1.0);
+          state.spin.multiplyScalar(1.0 - w).addScaledVector(axis, (angle / Math.max(dt, 1.0 / 240.0)) * w);
+          moved = true;
+        }
+        input.panX = 0;
+        input.panY = 0;
+      } else if (!input.dragging && state.spin.lengthSq() > 1e-10) {
+        // Controlled, natural inertia after release
+        const speed = state.spin.length();
+        const axis = state.spin.clone().divideScalar(speed);
+        const angle = speed * dt;
+        rotateAbout(pose.d, axis, angle, pose.d);
+        rotateAbout(pose.fwd, axis, angle, pose.fwd);
+        state.spin.multiplyScalar(Math.exp(-dt / 0.32));
+        moved = true;
+      } else if (input.dragging) {
+        // Holding still kills throw inertia: stops accidental flight
+        state.spin.multiplyScalar(Math.exp(-dt / 0.05));
+      }
+
+      // Turn + tilt (right-drag or shift/ctrl-drag)
+      if (input.turnX !== 0 || input.turnY !== 0) {
+        rotateAbout(pose.fwd, pose.d, -input.turnX * 0.22 * DEG, pose.fwd);
+        pose.tilt = Math.max(0.0, Math.min(70.0 * DEG, pose.tilt - input.turnY * 0.20 * DEG));
+        input.turnX = 0;
+        input.turnY = 0;
+        moved = true;
+      }
+
+      // Zoom: ease log-range toward accumulated target
+      if (input.zoom !== 0) {
+        const base = state.zoomTarget !== null ? state.zoomTarget : Math.log(pose.range);
+        state.zoomTarget = Math.max(Math.log(floor), Math.min(Math.log(ceil), base + input.zoom));
+        input.zoom = 0;
+      }
+      if (state.zoomTarget !== null) {
+        const cur = Math.log(pose.range);
+        const next = cur + (state.zoomTarget - cur) * (1.0 - Math.exp(-dt / 0.12));
+        pose.range = Math.exp(next);
+        if (Math.abs(state.zoomTarget - next) < 1e-4) state.zoomTarget = null;
+        moved = true;
+      } else if (pose.range < floor * 0.999) {
+        pose.range += (floor - pose.range) * (1.0 - Math.exp(-dt / 0.35));
+      }
+
+      if (northUp) {
+        // Keep look-at point off the poles to avoid pole singularities
+        const maxY = Math.sin(82.0 * DEG);
+        if (Math.abs(pose.d.y) > maxY) {
+          const s = Math.sign(pose.d.y);
+          const h = Math.sqrt(1.0 - maxY * maxY) / Math.max(1e-9, Math.hypot(pose.d.x, pose.d.z));
+          pose.d.set(pose.d.x * h, s * maxY, pose.d.z * h);
+          state.spin.set(0, state.spin.y, 0);
+        }
+      }
+
+      orthonormalize(pose);
+      return moved;
     }
 
     // ── 4. Progressive & Base64 Textures ────────────────────────────────────
@@ -662,7 +843,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
         float hR = luma(texture2D(uDay, vUv + vec2(dUv.x, 0.0)).rgb);
         float hT = luma(texture2D(uDay, vUv + vec2(0.0, dUv.y)).rgb);
         vec3 bump = vec3((hR - hC) * 1.5, (hT - hC) * 1.5, 0.0) * (1.0 - ocean);
-        vec3 effN = normalize(N + bump * (1.0 - dayMix * 0.15));
+        vec3 effN = normalize(N + bump * 0.85);
         float effNdL = dot(effN, L);
 
         vec3 albedo = pow(gradeDay(dayTex, ocean), vec3(1.12)) * 1.06;
@@ -981,16 +1162,9 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     reticleQuad.quaternion.setFromRotationMatrix(basisMatrix);
     scene.add(reticleQuad);
 
-    // ── 10. Smooth Cinematic Camera Director & Flight Math ──────────────────
-    let flight = {
-      active: false,
-      startTime: 0,
-      duration: 2400,
-      startDir: new THREE.Vector3(),
-      startDist: 3.2,
-      destDir: new THREE.Vector3(),
-      destDist: 2.25
-    };
+    // ── 10. Smooth Cinematic Camera Director & Gesture Listeners ─────────────
+    let currentPose = createPose(0, 0, 2.3, 0.0);
+    applyPoseToCamera(currentPose, camera);
 
     function easeInOutCubic(t) {
       return t < 0.5 ? 4.0 * t * t * t : 1.0 - Math.pow(-2.0 * t + 2.0, 3.0) / 2.0;
@@ -1000,43 +1174,137 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       return 1.0 - (1.0 - t) * (1.0 - t);
     }
 
-    function slerpDir(v1, v2, t, out) {
-      const dot = Math.max(-1.0, Math.min(1.0, v1.dot(v2)));
+    function interpolatePose(a, b, t, bump, out) {
+      const dot = Math.max(-1.0, Math.min(1.0, a.d.dot(b.d)));
       const theta = Math.acos(dot);
-      if (theta < 1e-5) return out.copy(v1).lerp(v2, t).normalize();
-      const s = Math.sin(theta);
-      const wa = Math.sin((1.0 - t) * theta) / s;
-      const wb = Math.sin(t * theta) / s;
-      return out.set(
-        v1.x * wa + v2.x * wb,
-        v1.y * wa + v2.y * wb,
-        v1.z * wa + v2.z * wb
-      ).normalize();
+      if (theta < 1e-7) {
+        out.d.copy(a.d).lerp(b.d, t).normalize();
+        const phi = signedAngle(a.fwd, b.fwd, out.d);
+        rotateAbout(a.fwd, out.d, phi * t, out.fwd);
+      } else {
+        const n1 = new THREE.Vector3().crossVectors(a.d, b.d);
+        if (n1.lengthSq() < 1e-14) {
+          n1.crossVectors(a.d, Math.abs(a.d.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0));
+        }
+        n1.normalize();
+        const curD = new THREE.Vector3();
+        rotateAbout(a.d, n1, theta * t, curD);
+        out.d.copy(curD);
+        const ta = new THREE.Vector3().crossVectors(n1, a.d);
+        const tb = new THREE.Vector3().crossVectors(n1, b.d);
+        const tt = new THREE.Vector3().crossVectors(n1, out.d);
+        const relA = signedAngle(ta, a.fwd, a.d);
+        const relB = signedAngle(tb, b.fwd, b.d);
+        const rel = relA + wrapPi(relB - relA) * t;
+        rotateAbout(tt, out.d, rel, out.fwd);
+      }
+      if (t >= 1.0) {
+        out.d.copy(b.d);
+        out.fwd.copy(b.fwd);
+      }
+      orthonormalize(out);
+      const s = Math.sin(Math.PI * Math.max(0.0, Math.min(1.0, t)));
+      out.range = Math.exp(Math.log(a.range) * (1.0 - t) + Math.log(b.range) * t + (bump || 0.0) * s);
+      out.tilt = a.tilt * (1.0 - t) + b.tilt * t;
+      out.r = a.r;
+      return out;
     }
 
     let arrivalTime = performance.now();
+    let flight = {
+      active: false,
+      startTime: 0,
+      duration: 2200,
+      startPose: null,
+      destPose: null,
+      bump: 0.25
+    };
 
-    function flyToTarget(distance, duration) {
-      distance = distance || 2.25;
-      duration = duration || 2400;
-
+    function flyToCoordinates(lat, lon, range, duration, bump) {
+      duration = duration || 2200;
+      range = range !== undefined ? range : 1.25;
+      const dest = createPose(lat, lon, range, 0.0);
       flight.active = true;
       flight.startTime = performance.now();
       flight.duration = duration;
-      flight.startDir.copy(camera.position).normalize();
-      flight.startDist = camera.position.length();
-
-      const targetDir = targetSurfacePos.clone().normalize();
-      flight.destDir.copy(targetDir);
-      flight.destDist = distance;
-
+      flight.startPose = clonePose(currentPose);
+      flight.destPose = dest;
+      flight.bump = bump !== undefined ? bump : 0.25;
       reticleUniforms.uLock.value = 0.0;
     }
 
-    // Yield flight immediately when user drags or scrolls
-    controls.addEventListener('start', () => {
-      flight.active = false;
+    // Attach Watched.earth Pointer & Wheel Listeners
+    const pointers = new Map();
+    let gestureMode = null;
+    let pinchDist = 0;
+
+    function markInput() {
+      controlInput.lastInputAt = performance.now();
+      flight.active = false; // Yield flight seamlessly to direct user manipulation
+    }
+
+    container.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
+      container.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      gestureMode = (e.button === 2 || e.shiftKey || e.ctrlKey || e.metaKey) ? 'turn' : 'pan';
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      }
+      controlInput.dragging = true;
+      controlInput.gestureId++;
+      markInput();
     });
+
+    container.addEventListener('pointermove', (e) => {
+      const p = pointers.get(e.pointerId);
+      if (!p) return;
+      const dx = e.clientX - p.x;
+      const dy = e.clientY - p.y;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (pointers.size >= 2) {
+        const [a, b] = [...pointers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist > 0 && d > 0) controlInput.zoom += Math.log(pinchDist / d);
+        pinchDist = d;
+        controlInput.panX += dx / 2;
+        controlInput.panY += dy / 2;
+      } else if (gestureMode === 'turn') {
+        controlInput.turnX += dx;
+        controlInput.turnY += dy;
+      } else {
+        controlInput.panX += dx;
+        controlInput.panY += dy;
+      }
+      markInput();
+    });
+
+    const onPointerEnd = (e) => {
+      if (!pointers.delete(e.pointerId)) return;
+      if (pointers.size < 2) pinchDist = 0;
+      if (pointers.size === 0) {
+        controlInput.dragging = false;
+        gestureMode = null;
+      }
+      markInput();
+    };
+
+    container.addEventListener('pointerup', onPointerEnd);
+    container.addEventListener('pointercancel', onPointerEnd);
+
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+      const clampedDelta = Math.max(-200, Math.min(200, e.deltaY * unit));
+      // Log-space zoom factor: gentle, low sensitivity
+      controlInput.zoom += clampedDelta * 0.0009;
+      controlInput.gestureId++;
+      markInput();
+    }, { passive: false });
+
+    container.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // ── 11. Interactive Dock & Time Modes ────────────────────────────────────
     let simMode = 'live'; // 'live' | 'sweep'
@@ -1050,7 +1318,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     const btnNight = document.getElementById('btn-night');
 
     btnFocus.addEventListener('click', () => {
-      flyToTarget(2.2, 1900);
+      flyToCoordinates(targetLat, targetLon, 1.25, 2000, 0.20);
     });
 
     btnLive.addEventListener('click', () => {
@@ -1084,7 +1352,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       simMode = 'pause';
       btnLive.classList.remove('active');
       btnSweep.classList.remove('active');
-      flyToTarget(2.3, 1600);
+      flyToCoordinates(targetLat, targetLon, 1.25, 1800, 0.20);
     });
 
     btnNight.addEventListener('click', () => {
@@ -1098,7 +1366,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       simMode = 'pause';
       btnLive.classList.remove('active');
       btnSweep.classList.remove('active');
-      flyToTarget(2.3, 1600);
+      flyToCoordinates(targetLat, targetLon, 1.25, 1800, 0.20);
     });
 
     // ── 12. Frame Loop & Live Clock ──────────────────────────────────────────
@@ -1135,13 +1403,13 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     }
 
     // Initial camera placement: start overview then smoothly fly to target
-    flyToTarget(2.2, 2200);
+    flyToCoordinates(targetLat, targetLon, 1.25, 2200, 0.25);
 
     function animate() {
       requestAnimationFrame(animate);
 
       const nowPerf = performance.now();
-      const dtSec = Math.min(0.1, (nowPerf - lastFramePerf) / 1000.0);
+      const dtSec = Math.min(0.05, Math.max(0.001, (nowPerf - lastFramePerf) / 1000.0));
       lastFramePerf = nowPerf;
 
       // Update simulation time
@@ -1172,27 +1440,19 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
 
       updateEphemerisUI(simTime);
 
-      // Smooth Great-Circle Camera Flight
+      // Smooth Great-Circle Camera Flight or Direct Manipulation
       if (flight.active) {
         const rawT = Math.min(1.0, (nowPerf - flight.startTime) / flight.duration);
         const t = easeInOutCubic(rawT);
-
-        const curDir = new THREE.Vector3();
-        slerpDir(flight.startDir, flight.destDir, t, curDir);
-        // Altitude arc lifts the camera during flight so it feels like orbital travel
-        const arcLift = Math.sin(t * Math.PI) * 0.35;
-        const curDist = flight.startDist + (flight.destDist - flight.startDist) * t + arcLift;
-
-        camera.position.copy(curDir).multiplyScalar(curDist);
-        camera.up.set(0, 1, 0);
-        controls.target.set(0, 0, 0);
-        controls.update();
-
+        interpolatePose(flight.startPose, flight.destPose, t, flight.bump, currentPose);
         if (rawT >= 1.0) {
           flight.active = false;
           arrivalTime = nowPerf;
         }
+      } else {
+        applyControls(currentPose, controlInput, controlState, dtSec, camera.fov, height, true, MIN_RANGE, MAX_RANGE);
       }
+      applyPoseToCamera(currentPose, camera);
 
       // Reticle Lock & Beacon Pulse Animation
       if (!flight.active) {
@@ -1202,7 +1462,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       // Gentle beacon pulse every 2.4s
       reticleUniforms.uPulse.value = ((nowPerf - arrivalTime) % 2400.0) / 2400.0;
 
-      controls.update();
       renderer.render(scene, camera);
     }
 

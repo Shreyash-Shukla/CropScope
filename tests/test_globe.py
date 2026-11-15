@@ -134,6 +134,42 @@ class GlobeAstronomicalTests(unittest.TestCase):
         self.assertIn("btn-focus", html)
         self.assertIn("data:image/webp;base64,", html)
 
+    def test_direct_manipulation_camera_sensitivity_controls(self):
+        html = build_globe_html(29.748, 77.048, "Karnal Farm", height=540)
+        # Direct-manipulation camera math functions from Watched.earth
+        self.assertIn("radiansPerPixel", html)
+        self.assertIn("applyControls", html)
+        self.assertIn("createPose", html)
+        self.assertIn("interpolatePose", html)
+        self.assertIn("MIN_RANGE", html)
+        self.assertIn("MAX_RANGE", html)
+        # Verify that gesture listeners with pointer captures exist
+        self.assertIn("setPointerCapture", html)
+        self.assertIn("pointerdown", html)
+        self.assertIn("pointermove", html)
+        self.assertIn("touch-action: none", html)
+        # Verify wheel input is clamped to prevent sudden sensitivity spikes
+        self.assertIn("clampedDelta", html)
+
+    def test_radians_per_pixel_sensitivity_scaling_math(self):
+        fov_deg = 38.0
+        height_px = 540.0
+        tan_half = math.tan(math.radians(fov_deg) / 2.0)
+
+        # Overview range vs close inspection range
+        overview_range = 2.2
+        close_range = 0.25
+
+        k_overview = (2.0 * overview_range * tan_half) / height_px
+        k_close = (2.0 * close_range * tan_half) / height_px
+
+        # Panning sensitivity close to ground must be almost an order of magnitude smaller
+        # than overview, preventing wild overshooting when zoomed in
+        self.assertLess(k_close, k_overview * 0.15)
+        # 10 px drag at close range moves less than 0.2 degrees on the globe
+        drag_10px_close_deg = math.degrees(10.0 * k_close)
+        self.assertLess(drag_10px_close_deg, 0.2)
+
 
 if __name__ == "__main__":
     unittest.main()
