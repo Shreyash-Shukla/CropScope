@@ -626,8 +626,8 @@ def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> 
     is_day, elev = is_location_sunlit(lat, lon)
     sun_badge = "DAYLIGHT" if is_day else "NIGHT SHADOW"
 
-    globe_html = build_globe_html(lat, lon, location_title, height=540)
-    st.components.v1.html(globe_html, height=555)
+    globe_html = build_globe_html(lat, lon, location_title, height=680)
+    st.components.v1.html(globe_html, height=700)
 
     with st.expander("MAP / 2D High-Resolution Field Inspection Boundary", expanded=False):
         preview = folium.Map(location=list(area.center), zoom_start=14, control_scale=True, tiles=None)

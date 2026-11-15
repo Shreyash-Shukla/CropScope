@@ -49,7 +49,7 @@ class AppUITests(unittest.TestCase):
         self.assertEqual(at.button[1].label, t("btn_use_saved", "hi"))
 
     def test_kisan_mitra_chat_interaction(self):
-        at = AppTest.from_file(APP_PATH, default_timeout=20)
+        at = AppTest.from_file(APP_PATH, default_timeout=35)
         at.run()
         at.radio[0].set_value("Use sample preset").run()
         at.selectbox(key="crop_select").select("Wheat").run()

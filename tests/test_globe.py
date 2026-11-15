@@ -216,6 +216,19 @@ class GlobeAstronomicalTests(unittest.TestCase):
         self.assertIn("☁️ Clouds: Off", html_off)
         self.assertIn("let cloudsVisible = false;", html_off)
 
+    def test_globe_layout_decluttering_and_height(self):
+        # Default height should be generous 680px
+        html_default = build_globe_html(29.748, 77.048, "Karnal Farm")
+        self.assertIn("const height = container.clientHeight || 680;", html_default)
+
+        # Check non-overlapping 2-tier HUD architecture
+        self.assertIn("hud-top-bar", html_default)
+        self.assertIn("hud-bottom-bar", html_default)
+        self.assertIn("controls-dock", html_default)
+        self.assertIn("target-callout", html_default)
+        self.assertIn("ro-bl", html_default)
+        self.assertIn("ro-br", html_default)
+
 
 if __name__ == "__main__":
     unittest.main()

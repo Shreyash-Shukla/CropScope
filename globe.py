@@ -279,25 +279,39 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     .bezel-frame .ruler-left { left: 16px; width: 140px; }
     .bezel-frame .ruler-right { right: 16px; width: 140px; }
 
-    /* ── Corner Readouts (Martian Mono) ── */
-    .corner-readout {
+    /* ── Top Header Bar ── */
+    .hud-top-bar {
       position: absolute;
+      top: 18px;
+      left: 24px;
+      right: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      z-index: 15;
+    }
+    .hud-top-left {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      pointer-events: auto;
+    }
+    .hud-top-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+      text-align: right;
       font-family: var(--font-mono);
       font-size: 11px;
       color: var(--bone-3);
       letter-spacing: 0.04em;
-      text-transform: uppercase;
-      z-index: 12;
-      pointer-events: none;
     }
-    .ro-tl { top: 24px; left: 26px; }
-    .ro-tr { top: 24px; right: 26px; text-align: right; }
-    .ro-bl { bottom: 24px; left: 26px; }
-    .ro-br { bottom: 24px; right: 26px; text-align: right; }
 
     .wordmark {
       font-family: var(--font-sans);
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 600;
       letter-spacing: -0.01em;
       color: var(--bone);
@@ -307,10 +321,10 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     }
     .wordmark-sub {
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: 9.5px;
       color: var(--bone-3);
-      margin-top: 2px;
       letter-spacing: 0.06em;
+      text-transform: uppercase;
     }
     .signal-dot {
       color: var(--signal);
@@ -331,58 +345,72 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
 
     /* ── Target Info Plate ── */
     .target-callout {
-      position: absolute;
-      top: 66px;
-      left: 26px;
-      background: var(--ink-1);
+      background: rgba(12, 14, 17, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       border: 1px solid var(--line);
-      padding: 9px 13px;
-      z-index: 15;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+      padding: 6px 11px;
+      border-radius: 2px;
+      max-width: 380px;
     }
     .callout-title {
       font-family: var(--font-sans);
-      font-size: 13.5px;
+      font-size: 12.5px;
       font-weight: 500;
       color: var(--bone);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .callout-meta {
       font-family: var(--font-mono);
-      font-size: 10.5px;
+      font-size: 10px;
       color: var(--bone-3);
-      margin-top: 3px;
+      margin-top: 2px;
+      letter-spacing: 0.02em;
     }
     .signal-text {
       color: var(--signal);
+      font-weight: 500;
     }
 
-    /* ── Central Controls Dock ── */
+    /* ── Central Controls Dock (Tier 1 of Bottom) ── */
     .controls-dock {
       position: absolute;
-      bottom: 24px;
+      bottom: 50px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      align-items: center;
       justify-content: center;
-      max-width: 95%;
-      gap: 6px;
-      z-index: 20;
-      background: var(--ink-1);
-      border: 1px solid var(--line);
-      padding: 4px;
+      gap: 5px;
+      z-index: 25;
+      background: rgba(12, 14, 17, 0.90);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--line-strong);
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.65);
+      padding: 4px 6px;
+      border-radius: 3px;
+      max-width: 96%;
     }
     .inst-btn {
       background: transparent;
       border: 1px solid transparent;
       color: var(--bone-2);
       font-family: var(--font-mono);
-      font-size: 11px;
-      padding: 6px 11px;
+      font-size: 10.5px;
+      padding: 5px 9px;
       text-transform: uppercase;
+      letter-spacing: 0.02em;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 5px;
+      border-radius: 2px;
+      white-space: nowrap;
       transition: background 120ms ease, color 120ms ease;
     }
     .inst-btn:hover {
@@ -393,6 +421,50 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       background: var(--signal);
       color: var(--ink-0);
       font-weight: 500;
+    }
+
+    /* ── Bottom Telemetry & Ephemeris Strip (Tier 2 of Bottom) ── */
+    .hud-bottom-bar {
+      position: absolute;
+      bottom: 16px;
+      left: 24px;
+      right: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--bone-3);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      z-index: 15;
+      pointer-events: none;
+    }
+    .hud-bottom-bar .ro-bl,
+    .hud-bottom-bar .ro-br {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* ── Responsive Adaptations ── */
+    @media (max-width: 860px) {
+      .controls-dock {
+        bottom: 44px;
+        flex-wrap: wrap;
+        gap: 3px;
+        padding: 3px 4px;
+      }
+      .inst-btn {
+        font-size: 9.5px;
+        padding: 4px 6px;
+      }
+      .telemetry-detail {
+        display: none;
+      }
+      .target-callout {
+        max-width: 260px;
+      }
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -411,48 +483,45 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     <span class="corner br"></span>
   </div>
 
-  <!-- Top-Left Corner Readout -->
-  <div class="corner-readout ro-tl">
-    <div class="wordmark">CropScope<span class="signal-dot">.</span></div>
-    <div class="wordmark-sub">ORBITAL MISSION CONSOLE · SGP4</div>
-  </div>
-
-  <!-- Target Info Plate -->
-  <div class="target-callout">
-    <div class="callout-title">__LOCATION_NAME_TEXT__</div>
-    <div class="callout-meta">
-      <span class="signal-text">TARGET</span> __LAT_FMT__° N, __LON_FMT__° E · <span id="target-solar-state">__SOLAR_STATUS__</span>
+  <!-- Top Header Bar (HUD Top) -->
+  <div class="hud-top-bar">
+    <div class="hud-top-left">
+      <div class="wordmark">CropScope<span class="signal-dot">.</span> <span class="wordmark-sub">MISSION CONSOLE · SGP4</span></div>
+      <div class="target-callout">
+        <div class="callout-title">__LOCATION_NAME_TEXT__</div>
+        <div class="callout-meta">
+          <span class="signal-text">TARGET</span> __LAT_FMT__° N, __LON_FMT__° E · <span id="target-solar-state">__SOLAR_STATUS__</span>
+        </div>
+      </div>
+    </div>
+    <div class="hud-top-right ro-tr">
+      <div>
+        <span class="clock-display" id="live-utc-clock">2026-11-14 00:00:00 UTC</span>
+        <span class="blink-dot"></span>
+      </div>
     </div>
   </div>
 
-  <!-- Top-Right Live UTC Clock with Blinking Signal Dot -->
-  <div class="corner-readout ro-tr">
-    <span class="clock-display" id="live-utc-clock">2026-11-14 00:00:00 UTC</span>
-    <span class="blink-dot"></span>
-  </div>
-
-  <!-- Bottom-Left Telemetry -->
-  <div class="corner-readout ro-bl">
-    <div class="status-line">
-      <span style="color: var(--signal); font-weight: 500;">SENTINEL-2 L2A</span>
-      <span> · 10M MULTISPECTRAL · AWS STAC · REALTIME SUN</span>
-    </div>
-  </div>
-
-  <!-- Bottom-Right Ephemeris (Watched.earth Subsolar Coordinates) -->
-  <div class="corner-readout ro-br">
-    <div>SUBSOLAR <span id="sun-coords">__SUBSOLAR_LAT__° __SUBSOLAR_LON__°</span></div>
-    <div style="margin-top: 2px;">SOLAR ELEVATION <span id="sun-elev" style="color: var(--bone);">__SOLAR_ELEV__°</span></div>
-  </div>
-
-  <!-- Central Controls Dock -->
+  <!-- Central Controls Dock (Tier 1 of Bottom) -->
   <div class="controls-dock">
     <button class="inst-btn" id="btn-focus">🎯 Focus Target</button>
     <button class="inst-btn active" id="btn-live">⏱️ Live UTC</button>
-    <button class="inst-btn" id="btn-sweep">⏯️ 24h Darkness Sweep</button>
+    <button class="inst-btn" id="btn-sweep">⏯️ 24h Sweep</button>
     <button class="inst-btn" id="btn-sun">☀️ Solar Noon</button>
     <button class="inst-btn" id="btn-night">🌙 Night Limb</button>
     <button class="inst-btn active" id="btn-clouds">☁️ Clouds: On</button>
+  </div>
+
+  <!-- Bottom Telemetry & Ephemeris Strip (Tier 2 of Bottom) -->
+  <div class="hud-bottom-bar">
+    <div class="ro-bl">
+      <span style="color: var(--signal); font-weight: 500;">SENTINEL-2 L2A</span>
+      <span class="telemetry-detail"> · 10M MULTISPECTRAL · AWS STAC · REALTIME SUN</span>
+    </div>
+    <div class="ro-br">
+      <span>SUBSOLAR <span id="sun-coords">__SUBSOLAR_LAT__° __SUBSOLAR_LON__°</span></span>
+      <span class="telemetry-detail"> · ELEV <span id="sun-elev" style="color: var(--bone);">__SOLAR_ELEV__°</span></span>
+    </div>
   </div>
 
   <script>
@@ -1559,7 +1628,7 @@ def build_globe_html(
     center_lat: float,
     center_lon: float,
     location_name: str = "Selected Field",
-    height: int = 560,
+    height: int = 680,
     show_clouds: bool = True,
 ) -> str:
     """Build a complete Three.js WebGL component styled with Watched.earth art direction."""
