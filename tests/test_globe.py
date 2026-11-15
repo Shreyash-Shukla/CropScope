@@ -186,11 +186,9 @@ class GlobeAstronomicalTests(unittest.TestCase):
         self.assertIn("uData", html)
         self.assertIn("uDataTexel", html)
         self.assertIn("uBump", html)
-        # Verify NASA GIBS regional context basemap loader
-        self.assertIn("uCtxMap", html)
-        self.assertIn("uCtxUv", html)
-        self.assertIn("uCtxOn", html)
-        self.assertIn("BlueMarble_NextGeneration", html)
+        # Verify that mismatched square tile overlays are not injected (preventing square tile artifacts on Himalayas/terrain)
+        self.assertNotIn("uCtxMap", html)
+        self.assertNotIn("BlueMarble_NextGeneration", html)
         # Verify adaptive unsharp sharpening for zoom detail
         self.assertIn("zoomCloseness", html)
         self.assertIn("highPass", html)

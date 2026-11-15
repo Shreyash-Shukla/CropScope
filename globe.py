@@ -808,50 +808,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     cloudsTexture.magFilter = THREE.LinearFilter;
     cloudsTexture.generateMipmaps = true;
 
-    // ── Regional NASA GIBS 500m Context Basemap Loader ──────────────────────
-    const halfKm = 420.0;
-    const latSpan = halfKm / 111.0;
-    const cosTgt = Math.max(0.08, Math.cos(targetLat * DEG));
-    const lonSpan = halfKm / (111.0 * cosTgt);
-    const minLat = Math.max(-88.0, targetLat - latSpan);
-    const maxLat = Math.min(88.0, targetLat + latSpan);
-    const minLon = targetLon - lonSpan;
-    const maxLon = targetLon + lonSpan;
-
-    const ctxU = 0.5 + targetLon / 360.0;
-    const ctxV = 0.5 + targetLat / 180.0;
-    const ctxW = Math.max(0.001, (maxLon - minLon) / 360.0);
-    const ctxH = Math.max(0.001, (maxLat - minLat) / 180.0);
-    const ctxUvVec = new THREE.Vector4(ctxU, ctxV, ctxW, ctxH);
-
-    const gibsWmsUrl = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=BlueMarble_NextGeneration&STYLES=&FORMAT=image/jpeg&CRS=EPSG:4326&BBOX=' +
-      minLat.toFixed(4) + ',' + minLon.toFixed(4) + ',' + maxLat.toFixed(4) + ',' + maxLon.toFixed(4) +
-      '&WIDTH=1024&HEIGHT=1024&TIME=2004-08-01';
-
-    let ctxLoaded = false;
-    let ctxFade = 0.0;
-
-    const ctxLoader = new THREE.TextureLoader();
-    ctxLoader.setCrossOrigin('anonymous');
-    ctxLoader.load(
-      gibsWmsUrl,
-      function(tex) {
-        tex.encoding = THREE.sRGBEncoding;
-        tex.wrapS = THREE.ClampToEdgeWrapping;
-        tex.wrapT = THREE.ClampToEdgeWrapping;
-        tex.anisotropy = maxAniso;
-        tex.minFilter = THREE.LinearMipmapLinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        tex.generateMipmaps = true;
-        earthUniforms.uCtxMap.value = tex;
-        ctxLoaded = true;
-      },
-      undefined,
-      function() {
-        ctxLoaded = false; // Seamless fallback to 8K global texture
-      }
-    );
-
     // ── 5. Fixed Earth Mesh & Photoreal Shaders ──────────────────────────────
     const initialSun = sunDirectionWorld(Date.now());
 
@@ -871,9 +827,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       uniform sampler2D uData;
       uniform vec2 uDataTexel;
       uniform float uBump;
-      uniform sampler2D uCtxMap;
-      uniform vec4 uCtxUv;
-      uniform float uCtxOn;
 
       uniform vec3 uSunDir;
       uniform vec3 uCityColor;
@@ -900,17 +853,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
         return mix(c, sea, ocean);
       }
 
-      vec2 patchCoord(vec2 uv, vec4 b) {
-        float dx = uv.x - b.x;
-        dx -= floor(dx + 0.5);
-        return vec2(0.5 + dx / b.z, 0.5 + (uv.y - b.y) / b.w);
-      }
-
-      float patchMask(vec2 p, vec2 f) {
-        vec2 a = smoothstep(vec2(0.0), f, p) * smoothstep(vec2(0.0), f, 1.0 - p);
-        return a.x * a.y;
-      }
-
       void main() {
         vec3 N = normalize(vPos);
         vec3 V = normalize(cameraPosition - vPos);
@@ -924,17 +866,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
 
         // Base 8K Day map sample
         vec3 dayTex = texture2D(uDay, vUv).rgb;
-
-        // Regional high-resolution context patch (NASA 500m Blue Marble)
-        if (uCtxOn > 0.001) {
-          vec2 p = patchCoord(vUv, uCtxUv);
-          if (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) {
-            float mask = patchMask(p, vec2(0.12)) * uCtxOn;
-            vec2 t = vec2(p.x, 1.0 - p.y);
-            vec3 ctxCol = texture2D(uCtxMap, t).rgb;
-            dayTex = mix(dayTex, ctxCol, mask * land);
-          }
-        }
 
         // Adaptive high-frequency detail sharpening on zoom (anti-blur)
         float camDist = length(cameraPosition);
@@ -1026,9 +957,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       uData: { value: dataTexture },
       uDataTexel: { value: new THREE.Vector2(1.0 / 4096.0, 1.0 / 2048.0) },
       uBump: { value: 0.012 },
-      uCtxMap: { value: dayTexture },
-      uCtxUv: { value: ctxUvVec },
-      uCtxOn: { value: 0.0 },
       uSunDir: { value: initialSun },
       uCityColor: { value: new THREE.Color(0xffb070) },      // Sodium amber
       uTwilightColor: { value: new THREE.Color(0xff9a5a) },  // Warm terminator
@@ -1566,12 +1494,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
         pad2(simDate.getUTCSeconds()) + ' UTC';
 
       updateEphemerisUI(simTime);
-
-      // Smooth fade-in of regional high-resolution context patch
-      if (ctxLoaded && ctxFade < 1.0) {
-        ctxFade = Math.min(1.0, ctxFade + dtSec * 1.5);
-        earthUniforms.uCtxOn.value = ctxFade;
-      }
 
       // Smooth Great-Circle Camera Flight or Direct Manipulation
       if (flight.active) {
