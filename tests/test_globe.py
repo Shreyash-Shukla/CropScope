@@ -202,6 +202,20 @@ class GlobeAstronomicalTests(unittest.TestCase):
         self.assertNotIn("lonGrid", html)
         self.assertNotIn("gridLine", html)
 
+    def test_globe_clouds_toggle_option(self):
+        # Default with clouds enabled
+        html_on = build_globe_html(29.748, 77.048, "Karnal Farm", height=540, show_clouds=True)
+        self.assertIn('id="btn-clouds"', html_on)
+        self.assertIn("☁️ Clouds: On", html_on)
+        self.assertIn("let cloudsVisible = true;", html_on)
+        self.assertIn("cloudMesh.visible = cloudsVisible;", html_on)
+
+        # Clouds disabled option
+        html_off = build_globe_html(29.748, 77.048, "Karnal Farm", height=540, show_clouds=False)
+        self.assertIn('id="btn-clouds"', html_off)
+        self.assertIn("☁️ Clouds: Off", html_off)
+        self.assertIn("let cloudsVisible = false;", html_off)
+
 
 if __name__ == "__main__":
     unittest.main()

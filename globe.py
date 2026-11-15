@@ -362,6 +362,9 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       left: 50%;
       transform: translateX(-50%);
       display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 95%;
       gap: 6px;
       z-index: 20;
       background: var(--ink-1);
@@ -449,6 +452,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     <button class="inst-btn" id="btn-sweep">⏯️ 24h Darkness Sweep</button>
     <button class="inst-btn" id="btn-sun">☀️ Solar Noon</button>
     <button class="inst-btn" id="btn-night">🌙 Night Limb</button>
+    <button class="inst-btn active" id="btn-clouds">☁️ Clouds: On</button>
   </div>
 
   <script>
@@ -1417,6 +1421,28 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
       flyToCoordinates(targetLat, targetLon, 1.25, 1800, 0.20);
     });
 
+    // Cloud layer visibility toggle
+    const btnClouds = document.getElementById('btn-clouds');
+    let cloudsVisible = __SHOW_CLOUDS_INITIAL__;
+    cloudMesh.visible = cloudsVisible;
+    if (btnClouds) {
+      if (!cloudsVisible) {
+        btnClouds.classList.remove('active');
+        btnClouds.textContent = '☁️ Clouds: Off';
+      }
+      btnClouds.addEventListener('click', () => {
+        cloudsVisible = !cloudsVisible;
+        cloudMesh.visible = cloudsVisible;
+        if (cloudsVisible) {
+          btnClouds.classList.add('active');
+          btnClouds.textContent = '☁️ Clouds: On';
+        } else {
+          btnClouds.classList.remove('active');
+          btnClouds.textContent = '☁️ Clouds: Off';
+        }
+      });
+    }
+
     // ── 12. Frame Loop & Live Clock ──────────────────────────────────────────
     const clockElem = document.getElementById('live-utc-clock');
     const sunCoordsElem = document.getElementById('sun-coords');
@@ -1534,6 +1560,7 @@ def build_globe_html(
     center_lon: float,
     location_name: str = "Selected Field",
     height: int = 560,
+    show_clouds: bool = True,
 ) -> str:
     """Build a complete Three.js WebGL component styled with Watched.earth art direction."""
     sub_lat, sub_lon = compute_subsolar_point()
@@ -1575,6 +1602,13 @@ def build_globe_html(
     html = html.replace("__DATA_TEXTURE_DATA_URL__", data_tex_url)
     html = html.replace("__NIGHT_TEXTURE_DATA_URL__", night_tex_url)
     html = html.replace("__CLOUDS_TEXTURE_DATA_URL__", clouds_tex_url)
+    html = html.replace("__SHOW_CLOUDS_INITIAL__", "true" if show_clouds else "false")
+
+    if not show_clouds:
+        html = html.replace(
+            'class="inst-btn active" id="btn-clouds">☁️ Clouds: On',
+            'class="inst-btn" id="btn-clouds">☁️ Clouds: Off',
+        )
 
     return html
 
