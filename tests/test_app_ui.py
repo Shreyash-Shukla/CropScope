@@ -51,6 +51,15 @@ class AppUITests(unittest.TestCase):
         self.assertIn("DATA PROVENANCE", footer_markdown[0].upper())
         self.assertIn("HONEST SCIENTIFIC BOUNDARY", footer_markdown[0].upper())
 
+    def test_theme_selector_toggles_mode(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        theme_sel = at.selectbox(key="theme_selector")
+        self.assertEqual(theme_sel.value, "Dark")
+        self.assertEqual(at.session_state["theme"], "Dark")
+        theme_sel.select("Light").run()
+        self.assertEqual(at.session_state["theme"], "Light")
+
     def test_language_selector_updates_session_state(self):
         at = AppTest.from_file(APP_PATH, default_timeout=15)
         at.run()

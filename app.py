@@ -1181,12 +1181,25 @@ st.set_page_config(
     layout="wide",
 )
 
-st.markdown(
-    """
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@300;400;500;600&display=swap');
+current_theme = st.session_state.get("theme_selector") or st.session_state.get("theme", "Dark")
+st.session_state["theme"] = current_theme
 
-      :root {
+if current_theme == "Light":
+    theme_vars = """
+        --ink-0: #f6f8fa;
+        --ink-1: #ffffff;
+        --ink-2: #eef2f6;
+        --bone: #0f172a;
+        --bone-2: rgba(15, 23, 42, 0.78);
+        --bone-3: rgba(15, 23, 42, 0.58);
+        --bone-4: rgba(15, 23, 42, 0.16);
+        --line: rgba(15, 23, 42, 0.14);
+        --line-strong: rgba(15, 23, 42, 0.28);
+        --signal: #d9480f;
+        --signal-hover: #b83808;
+    """
+else:
+    theme_vars = """
         --ink-0: #07080a;
         --ink-1: #0c0e11;
         --ink-2: #14171c;
@@ -1198,6 +1211,25 @@ st.markdown(
         --line-strong: rgba(236, 232, 224, 0.22);
         --signal: #ff6a1a;
         --signal-hover: #ff8340;
+    """
+
+st.markdown(
+    f"""
+    <style>
+      :root {{
+{theme_vars}
+      }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@300;400;500;600&display=swap');
+
+      :root {
         --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
         --font-mono: 'Martian Mono', ui-monospace, monospace;
         --font-serif: 'Instrument Serif', Georgia, serif;
@@ -1276,7 +1308,7 @@ st.markdown(
       button[kind="secondary"]:hover, .stButton > button:hover {
         background-color: var(--ink-2) !important;
         border-color: var(--bone-2) !important;
-        color: #ffffff !important;
+        color: var(--bone) !important;
       }
 
       /* Inputs: Flat ink-1 with hairline borders */
@@ -1695,7 +1727,21 @@ def render_header(current_lang: str) -> None:
 current_lang = st.session_state.get("selected_language", "en")
 render_header(current_lang)
 
-hero_col, lang_col = st.columns([3, 1])
+hero_col, theme_col, lang_col = st.columns([2.6, 0.7, 0.7])
+with theme_col:
+    theme_options = ["Dark", "Light"]
+    cur_theme_idx = 0 if st.session_state.get("theme", "Dark") == "Dark" else 1
+    selected_theme = st.selectbox(
+        "🌓 Theme / थीम",
+        theme_options,
+        index=cur_theme_idx,
+        key="theme_selector",
+        help="Switch between Dark and Light mode interface themes.",
+    )
+    if st.session_state.get("theme") != selected_theme:
+        st.session_state["theme"] = selected_theme
+        st.rerun()
+
 with lang_col:
     lang_labels = get_language_names()
     default_lang = st.session_state.get("selected_language", "en")
