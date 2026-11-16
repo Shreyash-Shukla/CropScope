@@ -1509,13 +1509,99 @@ st.markdown(
         color: var(--bone) !important;
       }
 
-      /* Code blocks */
-      pre, code, div[data-testid="stCode"] {
+      /* Code blocks (st.code) */
+      div[data-testid="stCode"],
+      div.stCode {
         background-color: var(--ink-1) !important;
+        border: 1px solid var(--line-strong) !important;
+        border-radius: 0px !important;
+        position: relative !important;
+        padding: 2px !important;
+      }
+      div[data-testid="stCode"] pre,
+      div.stCode pre {
+        background-color: transparent !important;
+        border: none !important;
+        border-radius: 0px !important;
+        padding: 12px 14px !important;
+        margin: 0 !important;
+      }
+      div[data-testid="stCode"] code,
+      div.stCode code,
+      div[data-testid="stCode"] code * {
+        background-color: transparent !important;
         color: var(--bone) !important;
-        border: 1px solid var(--line) !important;
+        border: none !important;
         border-radius: 0px !important;
         font-family: var(--font-mono) !important;
+        font-size: 12px !important;
+      }
+
+      /* Streamlit Element Toolbars & Copy Buttons (in st.code, tables, charts) */
+      div[data-testid="stElementToolbar"],
+      div.stElementToolbar {
+        background: transparent !important;
+        top: 6px !important;
+        right: 6px !important;
+      }
+      div[data-testid="stElementToolbarButtonContainer"],
+      div.stElementToolbar > div,
+      div[data-testid="stElementToolbar"] > div {
+        background-color: var(--ink-2) !important;
+        border: 1px solid var(--line-strong) !important;
+        border-radius: 0px !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+        padding: 2px !important;
+      }
+      div[data-testid="stElementToolbarButton"],
+      div[data-testid="stElementToolbarButton"] button,
+      div[data-testid="stElementToolbar"] button,
+      button[data-testid="stElementToolbarButton"],
+      button[kind="elementToolbar"],
+      button[title*="Copy" i],
+      button[aria-label*="Copy" i],
+      .stCopyButton,
+      .stMenuVersionCopyButton {
+        background-color: transparent !important;
+        color: var(--bone) !important;
+        border: none !important;
+        border-radius: 0px !important;
+        padding: 4px 6px !important;
+        box-shadow: none !important;
+        transition: background-color 100ms ease, color 100ms ease !important;
+      }
+      div[data-testid="stElementToolbarButton"]:hover,
+      div[data-testid="stElementToolbarButton"] button:hover,
+      div[data-testid="stElementToolbar"] button:hover,
+      button[kind="elementToolbar"]:hover,
+      button[title*="Copy" i]:hover,
+      button[aria-label*="Copy" i]:hover,
+      .stCopyButton:hover {
+        background-color: var(--ink-0) !important;
+        color: var(--signal) !important;
+      }
+      div[data-testid="stElementToolbar"] svg,
+      div[data-testid="stElementToolbarButton"] svg,
+      div[data-testid="stElementToolbarButtonIcon"] svg,
+      button[kind="elementToolbar"] svg,
+      button[title*="Copy" i] svg,
+      button[aria-label*="Copy" i] svg,
+      .stCopyButton svg,
+      .stMenuVersionCopyButton svg {
+        fill: var(--bone) !important;
+        color: var(--bone) !important;
+        stroke: none !important;
+        transition: fill 100ms ease, color 100ms ease !important;
+      }
+      div[data-testid="stElementToolbarButton"]:hover svg,
+      div[data-testid="stElementToolbarButton"] button:hover svg,
+      div[data-testid="stElementToolbar"] button:hover svg,
+      button[kind="elementToolbar"]:hover svg,
+      button[title*="Copy" i]:hover svg,
+      button[aria-label*="Copy" i]:hover svg,
+      .stCopyButton:hover svg {
+        fill: var(--signal) !important;
+        color: var(--signal) !important;
       }
 
       /* Dataframes / Tables */

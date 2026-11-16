@@ -137,6 +137,16 @@ class AppUITests(unittest.TestCase):
         self.assertIn('background-color: var(--ink-2)', combined_css)
         self.assertIn('border-bottom: 1px solid var(--line)', combined_css)
 
+    def test_code_block_and_copy_toolbar_styling_rules(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        style_markdowns = [m.value for m in at.markdown if "<style>" in m.value]
+        combined_css = " ".join(style_markdowns)
+        self.assertIn('div[data-testid="stCode"]', combined_css)
+        self.assertIn('div[data-testid="stElementToolbarButtonContainer"]', combined_css)
+        self.assertIn('button[kind="elementToolbar"]', combined_css)
+        self.assertIn('fill: var(--bone)', combined_css)
+
 
 if __name__ == "__main__":
     unittest.main()
