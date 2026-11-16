@@ -509,6 +509,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
   <!-- Central Controls Dock (Tier 1 of Bottom) -->
   <div class="controls-dock">
     <button class="inst-btn" id="btn-focus">🎯 Focus Target</button>
+    <button class="inst-btn" id="btn-field-zoom" style="color: #ff6a1a; font-weight: 600;">🔍 Orbit ➔ Field Level</button>
     <button class="inst-btn active" id="btn-live">⏱️ Live UTC</button>
     <button class="inst-btn" id="btn-sweep">⏯️ 24h Sweep</button>
     <button class="inst-btn" id="btn-sun">☀️ Solar Noon</button>
@@ -1456,6 +1457,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     let lastFramePerf = performance.now();
 
     const btnFocus = document.getElementById('btn-focus');
+    const btnFieldZoom = document.getElementById('btn-field-zoom');
     const btnLive = document.getElementById('btn-live');
     const btnSweep = document.getElementById('btn-sweep');
     const btnSun = document.getElementById('btn-sun');
@@ -1464,6 +1466,24 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     btnFocus.addEventListener('click', () => {
       flyToCoordinates(targetLat, targetLon, 1.25, 2000, 0.20);
     });
+
+    if (btnFieldZoom) {
+      btnFieldZoom.addEventListener('click', () => {
+        flyToCoordinates(targetLat, targetLon, 0.22, 1300, 0.15);
+        setTimeout(() => {
+          try {
+            if (window.parent && window.parent.document) {
+              const el = window.parent.document.getElementById('field-inspector-section');
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              } else {
+                window.parent.scrollBy({ top: 680, behavior: 'smooth' });
+              }
+            }
+          } catch (err) {}
+        }, 1100);
+      });
+    }
 
     btnLive.addEventListener('click', () => {
       simMode = 'live';

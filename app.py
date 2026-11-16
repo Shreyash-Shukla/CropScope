@@ -67,23 +67,26 @@ def add_map_layers(map_obj: folium.Map) -> None:
         tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
         attr="&copy; OpenStreetMap &copy; CartoDB",
         name="Day / Light Mode",
+        max_zoom=19,
     ).add_to(map_obj)
     folium.TileLayer(
         tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png",
         attr="&copy; OpenStreetMap &copy; CartoDB",
         name="Night / Dark Mode",
+        max_zoom=19,
     ).add_to(map_obj)
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         attr="&copy; Esri World Imagery",
-        name="Satellite View",
+        name="Satellite View (Sub-Meter)",
+        max_zoom=19,
     ).add_to(map_obj)
     folium.LayerControl(position="topright", collapsed=True).add_to(map_obj)
 
 
 def draw_area() -> tuple[AnalysisArea | None, str | None]:
     st.write("Zoom to your location, choose the rectangle tool at the top left, and drag across one field. Use the layer icon (top right) to switch between Day/Night/Satellite maps. Use the crosshair icon to jump to your location. Use the trash tool to clear before drawing another.")
-    map_view = folium.Map(location=[18, 0], zoom_start=2, control_scale=True, tiles=None)
+    map_view = folium.Map(location=[18, 0], zoom_start=2, max_zoom=19, control_scale=True, tiles=None)
     add_map_layers(map_view)
     Geocoder(collapsed=True).add_to(map_view)
     LocateControl(auto_start=False, flyTo=True, keepCurrentZoomLevel=False).add_to(map_view)
@@ -630,13 +633,19 @@ def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> 
     globe_html = build_globe_html(lat, lon, location_title, height=680)
     st.components.v1.html(globe_html, height=700)
 
-    with st.expander("MAP / 2D High-Resolution Field Inspection Boundary", expanded=False):
-        preview = folium.Map(location=list(area.center), zoom_start=14, control_scale=True, tiles=None)
+    st.markdown('<div id="field-inspector-section"></div>', unsafe_allow_html=True)
+    with st.expander("🗺️ SUB-METER OPTICAL FIELD INSPECTOR (Zoom to crop rows & streets)", expanded=True):
+        st.caption(
+            "🛰️ **Orbit-to-Field Hybrid View**: High-resolution optical satellite imagery (Esri World Imagery + Sentinel-2, up to Zoom 19 / ~0.5m/pixel). "
+            "Use the map controls below to inspect individual crop rows, trees, and access roads."
+        )
+        preview = folium.Map(location=list(area.center), zoom_start=15, max_zoom=19, control_scale=True, tiles=None)
         folium.Rectangle(
             bounds=[[area.south, area.west], [area.north, area.east]],
             color="#ff6a1a",
             fill=True,
             fill_opacity=0.18,
+            popup=f"Field Boundary: {area.formatted_area()}",
         ).add_to(preview)
         add_map_layers(preview)
         preview.fit_bounds([[area.south, area.west], [area.north, area.east]])
@@ -644,10 +653,10 @@ def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> 
         st_folium(
             preview,
             key=preview_key,
-            height=340,
+            height=380,
             use_container_width=True,
             center=list(area.center),
-            zoom=14,
+            zoom=15,
             returned_objects=[],
         )
 

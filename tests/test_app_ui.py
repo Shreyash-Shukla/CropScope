@@ -119,6 +119,15 @@ class AppUITests(unittest.TestCase):
         at.chat_input(key="kisan_chat_input").set_value("How is canopy health?").run()
         self.assertGreaterEqual(len(at.session_state["kisan_chat_messages"]), 2)
 
+    def test_orbit_to_field_hybrid_inspector(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=25)
+        at.run()
+        at.radio[0].set_value("Use sample preset").run()
+        field_anchors = [m.value for m in at.markdown if "field-inspector-section" in m.value]
+        self.assertEqual(len(field_anchors), 1)
+        expanders = [e.label for e in at.expander if "SUB-METER OPTICAL FIELD INSPECTOR" in e.label]
+        self.assertEqual(len(expanders), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
