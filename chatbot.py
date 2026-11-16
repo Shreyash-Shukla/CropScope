@@ -241,12 +241,156 @@ def build_farmer_dossier(outcome: AnalysisOutcome, lang: str = "en") -> str:
     return "\n".join(lines)
 
 
+# ── Agronomic Domain Guardrails & Refusal Handlers ───────────────────────────
+
+OFF_TOPIC_STRICT_PATTERNS = [
+    # Computer science, programming & algorithms
+    r"\blinked\s*list\b",
+    r"\bbinary\s*tree\b",
+    r"\bleetcode\b",
+    r"\bcodeforces\b",
+    r"\bhacker\s*rank\b",
+    r"\b(write|give|create|generate|provide)\s+(a\s+)?(code|program|script|function|algorithm|class)\b",
+    r"\b(python|java|c\+\+|javascript|typescript|golang|rust|html|css|sql)\s+(program|code|script|solution)\b",
+    r"\b(reverse|sort|traverse|invert)\s+(the\s+|a\s+)?(linked\s*list|string|array|binary\s*tree)\b",
+    r"\b(bubble|quick|merge|insertion|heap)\s*sort\b",
+    r"\bfibonacci\s*(series|sequence|number)?\b",
+    r"\b(time|space)\s+complexity\b",
+    r"\b(लिंक्ड\s*लिस्ट|रिवर्स|प्रोग्राम|कोडिंग)\b",
+    # Cinema & Entertainment
+    r"\bjames\s*bond\b",
+    r"\b(plot|story|ending|review|synopsis)\s+(of|for)\s+([a-z0-9\s]+\s+)?(movie|film|series|cinema|show)\b",
+    r"\b(movie|film|cinema)\s+(plot|synopsis|storyline)\b",
+    r"\bwho\s+acted\s+in\b",
+    r"\b(जेम्स\s*बॉन्ड|फिल्म\s+की\s+कहानी|मूवी\s+की\s+कहानी)\b",
+    # Video Games
+    r"\b(video\s*game|playstation|xbox|minecraft|fortnite|gta|grand\s+theft\s+auto)\b",
+    # Sports & General Politics/Finance
+    r"\b(cricket\s+score|ipl\s+match|fifa\s+world\s*cup)\b",
+    r"\b(bitcoin|cryptocurrency|crypto\s+wallet|ethereum)\b",
+    r"\b(stock\s+market|day\s+trading|mutual\s+fund\s+portfolio)\b",
+]
+
+OFF_TOPIC_GENERAL_PATTERNS = [
+    r"\b(movie|film|cinema|actor|actress|bollywood|hollywood|netflix)\b",
+    r"\b(programming|coding|algorithm|data\s*structure)\b",
+    r"\b(song\s+lyrics|tell\s+me\s+a\s+joke)\b",
+    r"\b(फिल्म|मूवी|सिनेमा|गाना|क्रिकेट)\b",
+]
+
+AGRONOMIC_CONTEXT_TERMS = [
+    "crop", "farm", "farmer", "field", "soil", "wheat", "paddy", "rice",
+    "maize", "cotton", "mustard", "sugarcane", "potato", "tomato", "chilli",
+    "onion", "canopy", "ndvi", "savi", "irrigation", "water", "rain",
+    "weather", "pest", "disease", "spray", "pesticide", "fertilizer",
+    "seed", "sowing", "harvest", "yield", "dossier", "khet", "fasal",
+    "kisan", "barish", "mausam", "sinchai", "खेती", "फसल", "खेत",
+    "मौसम", "बारिश", "खाद", "दवा", "स्प्रे", "सिंचाई", "बीज"
+]
+
+
+def is_off_topic_query(query: str) -> bool:
+    """Detect if a user query is unambiguously non-agronomic / off-topic."""
+    q = query.lower().strip()
+    if not q:
+        return False
+
+    # Check strict off-topic patterns that never belong in field agronomy
+    for pat in OFF_TOPIC_STRICT_PATTERNS:
+        if re.search(pat, q):
+            return True
+
+    # Check general entertainment/coding patterns only if no agronomic context is present
+    has_agronomic_context = any(term in q for term in AGRONOMIC_CONTEXT_TERMS)
+    if not has_agronomic_context:
+        for pat in OFF_TOPIC_GENERAL_PATTERNS:
+            if re.search(pat, q):
+                return True
+
+    return False
+
+
+def get_off_topic_refusal(lang: str = "en") -> str:
+    """Return a polite, localized domain refusal message redirecting to agronomy."""
+    refusals = {
+        "hi": (
+            "🌾 **किसान मित्र केवल कृषि एवं फसल सलाहकार है:**\n\n"
+            "मैं एक समर्पित डिजिटल कृषि सलाहकार (Krishi Vigyan Kendra / CropScope AI) हूँ। "
+            "मैं केवल आपकी फसल, मिट्टी, मौसम पूर्वानुमान, कीटनाशक/खाद छिड़काव और सैटेलाइट निगरानी से संबंधित प्रश्नों के उत्तर दे सकता हूँ।\n\n"
+            "⚠️ मैं फिल्मों, सॉफ्टवेयर प्रोग्रामिंग या गैर-कृषि विषयों पर सहायता करने में असमर्थ हूँ।\n\n"
+            "💡 *कृपया अपनी फसल (जैसे गेहूं, धान), आगामी मौसम, या खेत प्रबंधन के बारे में पूछें!*"
+        ),
+        "pa": (
+            "🌾 **ਕਿਸਾਨ ਮਿੱਤਰ ਖੇਤੀਬਾੜੀ ਸਲਾਹਕਾਰ:**\n\n"
+            "ਮੈਂ ਸਿਰਫ਼ ਖੇਤੀਬਾੜੀ ਅਤੇ ਫ਼ਸਲ ਪ੍ਰਬੰਧਨ (ਮੌਸਮ, ਸਿੰਚਾਈ, ਸਪਰੇਅ ਅਤੇ ਸੈਟੇਲਾਈਟ ਰਿਪੋਰਟ) ਲਈ ਇੱਕ ਵਿਸ਼ੇਸ਼ ਡਿਜੀਟਲ ਸਹਾਇਕ ਹਾਂ। "
+            "ਮੈਂ ਫ਼ਿਲਮਾਂ, ਕੰਪਿਊਟਰ ਕੋਡਿੰਗ ਜਾਂ ਗੈਰ-ਖੇਤੀਬਾੜੀ ਵਿਸ਼ਿਆਂ ਸੰਬੰਧੀ ਜਾਣਕਾਰੀ ਨਹੀਂ ਦੇ ਸਕਦਾ।\n\n"
+            "💡 *ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੀ ਫ਼ਸਲ, ਮੌਸਮ ਜਾਂ ਖੇਤ ਸੰਬੰਧੀ ਕੋਈ ਵੀ ਸਵਾਲ ਪੁੱਛੋ!*"
+        ),
+        "mr": (
+            "🌾 **किसान मित्र कृषी सल्लागार:**\n\n"
+            "मी केवळ शेती, पीक व्यवस्थापन, हवामान अंदाज, सिंचन आणि उपग्रह निरीक्षणासाठी समर्पित कृषी सल्लागार आहे. "
+            "मी चित्रपट, संगणक कोडिंग किंवा इतर गैर-कृषी विषयांवर मार्गदर्शन करू शकत नाही.\n\n"
+            "💡 *कृपया आपल्या शेतातील पिके किंवा हवामानाबद्दल प्रश्न विचारा!*"
+        ),
+        "te": (
+            "🌾 **కిసాన్ మిత్ర వ్యవసాయ సలహాదారు:**\n\n"
+            "నేను వ్యవసాయం, పంట యాజమాన్యం, వాతావరణ సమాచారం మరియు ఉపగ్రహ పర్యవేక్షణకు మాత్రమే సహాయపడగలను. "
+            "సినిమాలు, కంప్యూటర్ ప్రోగ్రామింగ్ వంటి ఇతర అంశాలపై నేను సమాధానం ఇవ్వలేను.\n\n"
+            "💡 *దయచేసి మీ పంట లేదా వ్యవసాయ పనుల గురించి అడగండి!*"
+        ),
+        "ta": (
+            "🌾 **கிசான் மித்ரா விவசாய ஆலோசகர்:**\n\n"
+            "நான் விவசாயம், பயிர் மேலாண்மை, வானிலை மற்றும் செயற்கைக்கோள் கண்காணிப்புக்கான பிரத்யேக ஆலோசகர். "
+            "திரைப்படங்கள், கணினி புரோகிராமிங் போன்ற விவசாயம் அல்லாத தலைப்புகளில் என்னால் பதிலளிக்க முடியாது.\n\n"
+            "💡 *தயவுசெய்து உங்கள் பயிர் அல்லது விவசாயம் சார்ந்த கேள்விகளைக் கேளுங்கள்!*"
+        ),
+        "gu": (
+            "🌾 **કિસાન મિત્ર કૃષિ સલાહકાર:**\n\n"
+            "હું ફક્ત ખેતી, પાક વ્યવસ્થાપન, હવામાન અને સેટેલાઇટ રિપોર્ટ માટે સમર્પિત ડિજિટલ સલાહકાર છું. "
+            "હું ફિલ્મો, કોડિંગ અથવા બિન-કૃષિ વિષયો પર માહિતી આપી શકતો નથી.\n\n"
+            "💡 *કૃપા કરીને તમારા પાક અથવા ખેત સંબંધી પ્રશ્ન પૂછો!*"
+        ),
+        "bn": (
+            "🌾 **কিষাণ মিত্র কৃষি উপদেষ্টা:**\n\n"
+            "আমি শুধুমাত্র কৃষি, ফসলের যত্ন, আবহাওয়া এবং স্যাটেলাইট মনিটরিং সম্পর্কিত সহায়তার জন্য নিবেদিত। "
+            "সিনেমা, কম্পিউটার কোডিং বা অ-কৃষি বিষয়ে আমি উত্তর দিতে অক্ষম।\n\n"
+            "💡 *অনুগ্রহ করে আপনার ফসল বা কৃষি সংক্রান্ত প্রশ্ন জিজ্ঞাসা করুন!*"
+        ),
+        "kn": (
+            "🌾 **ಕಿಸಾನ್ ಮಿತ್ರ ಕೃಷಿ ಸಲಹೆಗಾರ:**\n\n"
+            "ನಾನು ಕೃಷಿ, ಬೆಳೆ ನಿರ್ವಹಣೆ, ಹವಾಮಾನ ಮತ್ತು ಉಪಗ್ರಹ ವೀಕ್ಷಣೆಗೆ ಮಾತ್ರ ಮೀಸಲಾದ ಡಿಜಿಟಲ್ ಸಲಹೆಗಾರ. "
+            "ಸಿನಿಮಾ, ಪ್ರೋಗ್ರಾಮಿಂಗ್ ಅಥವಾ ಕೃಷಿಯೇತರ ವಿಷಯಗಳಿಗೆ ನಾನು ಉತ್ತರಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ.\n\n"
+            "💡 *ದಯವಿಟ್ಟು ನಿಮ್ಮ ಬೆಳೆ ಅಥವಾ ಕೃಷಿ ಸಂಬಂಧಿತ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಿ!*"
+        ),
+        "ml": (
+            "🌾 **കിസാൻ മിത്ര കാർഷിക ഉപദേശകൻ:**\n\n"
+            "ഞാൻ കൃഷി, വിള പരിപാലനം, കാലാവസ്ഥ എന്നിവയിൽ സഹായിക്കാൻ മാത്രമുള്ള കാർഷിക സഹായിയാണ്. "
+            "സിനിമകൾ, കമ്പ്യൂട്ടർ കോഡിംഗ് തുടങ്ങിയ കാർഷികേതര വിഷയങ്ങളിൽ എനിക്ക് മറുപടി നൽകാൻ കഴിയില്ല.\n\n"
+            "💡 *ദയവായി നിങ്ങളുടെ വിള അല്ലെങ്കിൽ കൃഷിയെക്കുറിച്ചുള്ള ചോദ്യങ്ങൾ ചോദിക്കുക!*"
+        ),
+    }
+
+    return refusals.get(
+        lang,
+        (
+            "🌾 **Kisan Mitra Agronomic Domain Scope:**\n\n"
+            "I am specialized exclusively as an agricultural and precision-farming field advisor (Krishi Vigyan Kendra / CropScope AI). "
+            "I can only assist with crop health, soil moisture balance, weather forecasts, spray planning, and satellite vegetation monitoring for your farm.\n\n"
+            "⚠️ I cannot answer questions about movies, entertainment, software programming, or other non-agricultural topics.\n\n"
+            "💡 *Please feel free to ask about your crop management, spraying windows, or local weather forecast!*"
+        ),
+    )
+
+
 def generate_fallback_response(
     query: str,
     stats: Dict[str, Any],
     lang: str = "en",
 ) -> str:
     """Generate a reliable, grounded rule-based advisory response when LLM is unavailable."""
+    if is_off_topic_query(query):
+        return get_off_topic_refusal(lang=lang)
+
     q_lower = query.lower()
     crop = stats.get("crop") or "Crop"
     rain_7d = stats.get("total_rain_7d_mm", 0.0)
@@ -423,6 +567,10 @@ def chat_with_kisan_mitra(
     if not latest_query:
         return ""
 
+    # Strict domain guardrail: refuse off-topic requests immediately
+    if is_off_topic_query(latest_query):
+        return get_off_topic_refusal(lang=lang)
+
     # Load API key
     load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
     key = api_key if api_key is not None else os.getenv("GEMINI_API_KEY")
@@ -439,16 +587,22 @@ def chat_with_kisan_mitra(
             f"{dossier}\n"
             f"=== END OF DOSSIER ===\n\n"
             f"STRICT INSTRUCTIONS:\n"
-            f"1. Language Requirement: You MUST reply entirely in {lang_label} ({lang_native}, code: {lang}). Use polite, warm, respectful rural farmer greetings.\n"
-            f"2. Strict Grounding: Use ONLY facts, dates, precipitation millimeters, and NDVI metrics from the dossier. Never invent ungrounded data. If information is unavailable in the dossier, say so honestly.\n"
-            f"3. Practical Agronomic Explanations:\n"
+            f"1. Strict Domain Scope & Guardrails (CRITICAL):\n"
+            f"   - You are EXCLUSIVELY an agricultural and precision-farming field advisor.\n"
+            f"   - You MUST REFUSE any questions or requests unrelated to agriculture, farming, crops, soil, agro-weather, irrigation, pesticides/fertilizers, or the provided field dossier.\n"
+            f"   - If the user asks about movies/entertainment (e.g. plot of James Bond or other films), computer programming/coding/algorithms (e.g. reversing a linked list, writing code), creative fiction, sports, politics, general trivia, or any non-farming topic, you MUST POLITELY DECLINE.\n"
+            f"   - When declining, explain warmly in {lang_label} ({lang_native}) that you are Kisan Mitra, dedicated solely to farm advisory and field operations, and invite them to ask about their crops, soil, weather, or satellite canopy health instead.\n"
+            f"   - NEVER fulfill off-topic requests under any circumstances.\n"
+            f"2. Language Requirement: You MUST reply entirely in {lang_label} ({lang_native}, code: {lang}). Use polite, warm, respectful rural farmer greetings.\n"
+            f"3. Strict Grounding: Use ONLY facts, dates, precipitation millimeters, and NDVI metrics from the dossier. Never invent ungrounded data. If information is unavailable in the dossier, say so honestly.\n"
+            f"4. Practical Agronomic Explanations:\n"
             f"   - Explain NDVI simply as crop greenness / foliage health ('फसल का हरापन').\n"
             f"   - Explain ET₀ simply as moisture lost to sunlight and air ('धूप-हवा से नमी का उड़ना').\n"
             f"   - Explain net water balance simply as moisture gain/loss ('पानी का संतुलन').\n"
-            f"4. Spray & Chemical Safety:\n"
+            f"5. Spray & Chemical Safety:\n"
             f"   - If imminent rain (>= 2 mm in 48h) or high winds/temperatures are forecast, explicitly WARN the farmer against spraying foliar chemicals to prevent rain wash-off and monetary waste.\n"
             f"   - NEVER prescribe unverified chemical dosages or cocktail mixes. Always suggest consulting the chemical packet label or local KVK officer for exact dosages.\n"
-            f"5. Formatting: Keep responses practical, well-structured with bullet points, and easy to read on mobile."
+            f"6. Formatting: Keep responses practical, well-structured with bullet points, and easy to read on mobile."
         )
 
         try:

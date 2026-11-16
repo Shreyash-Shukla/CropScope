@@ -2,7 +2,13 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 
 from analysis import AnalysisOutcome, SourceState
-from chatbot import build_farmer_dossier, chat_with_kisan_mitra, get_dossier_summary_stats
+from chatbot import (
+    build_farmer_dossier,
+    chat_with_kisan_mitra,
+    get_dossier_summary_stats,
+    get_off_topic_refusal,
+    is_off_topic_query,
+)
 from location import SAMPLE_AREA
 from models import AnalysisRequest, ForecastDay, SatelliteResult, WeatherResult
 from recommendations import Candidate, Evidence, Suggestion
@@ -210,6 +216,69 @@ class ChatbotEngineTests(unittest.TestCase):
             )
             self.assertEqual(res, mock_resp.text)
             mock_client_instance.models.generate_content.assert_called_once()
+
+    def test_off_topic_guardrail_refuses_james_bond_query(self):
+        query = "give me the plot of james bond film"
+        self.assertTrue(is_off_topic_query(query))
+
+        resp = chat_with_kisan_mitra(
+            [{"role": "user", "content": query}],
+            self.dossier,
+            self.stats,
+            lang="en",
+            api_key="mock-api-key",
+        )
+        self.assertIn("Kisan Mitra Agronomic Domain Scope", resp)
+        self.assertIn("agricultural and precision-farming", resp)
+        self.assertIn("cannot answer questions about movies", resp)
+
+    def test_off_topic_guardrail_refuses_reverse_linked_list_query(self):
+        query = "program to reverse the linked list"
+        self.assertTrue(is_off_topic_query(query))
+
+        resp = chat_with_kisan_mitra(
+            [{"role": "user", "content": query}],
+            self.dossier,
+            self.stats,
+            lang="en",
+            api_key="mock-api-key",
+        )
+        self.assertIn("Kisan Mitra Agronomic Domain Scope", resp)
+        self.assertIn("software programming", resp)
+
+    def test_off_topic_multilingual_refusals(self):
+        # Hindi refusal
+        resp_hi = chat_with_kisan_mitra(
+            [{"role": "user", "content": "write python code for quicksort"}],
+            self.dossier,
+            self.stats,
+            lang="hi",
+            api_key="mock-api-key",
+        )
+        self.assertIn("किसान मित्र केवल कृषि एवं फसल सलाहकार है", resp_hi)
+        self.assertIn("गैर-कृषि", resp_hi)
+
+        # Punjabi refusal
+        resp_pa = chat_with_kisan_mitra(
+            [{"role": "user", "content": "tell me about marvel movie"}],
+            self.dossier,
+            self.stats,
+            lang="pa",
+            api_key="mock-api-key",
+        )
+        self.assertIn("ਕਿਸਾਨ ਮਿੱਤਰ ਖੇਤੀਬਾੜੀ ਸਲਾਹਕਾਰ", resp_pa)
+        self.assertIn("ਗੈਰ-ਖੇਤੀਬਾੜੀ", resp_pa)
+
+    def test_agronomic_queries_not_flagged_as_off_topic(self):
+        legit_queries = [
+            "Will it rain this week on my wheat field?",
+            "Can I use plastic mulch film for weed suppression in tomato?",
+            "How do I manage stem borer pest in paddy?",
+            "What does mean NDVI 0.58 tell me about canopy health?",
+            "Should I irrigate today based on the water balance?",
+        ]
+        for q in legit_queries:
+            self.assertFalse(is_off_topic_query(q), f"Query wrongly flagged as off-topic: {q}")
 
 
 if __name__ == "__main__":
