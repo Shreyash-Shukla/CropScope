@@ -147,6 +147,8 @@ class AppUITests(unittest.TestCase):
         self.assertIn('div[data-testid="stElementToolbarButtonContainer"]', combined_css)
         self.assertIn('button[kind="elementToolbar"]', combined_css)
         self.assertIn('fill: var(--bone)', combined_css)
+        self.assertIn('div[data-testid="stCode"] [data-testid="stTooltipHoverTarget"]', combined_css)
+        self.assertIn('div[data-testid="stCode"] [data-testid="stTooltipContent"]', combined_css)
 
 
 if __name__ == "__main__":

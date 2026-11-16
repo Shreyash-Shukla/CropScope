@@ -281,6 +281,53 @@ def render_search_autocomplete_script() -> None:
     )
 
 
+def render_copy_tooltip_suppression_script() -> None:
+    """Suppress floating 'Copy to clipboard' tooltips when hovering over copy icons."""
+    st.components.v1.html(
+        """
+        <script>
+        (function() {
+          try {
+            const doc = window.parent.document;
+            if (!doc) return;
+
+            function suppressCopyTooltips() {
+              const codeBtns = doc.querySelectorAll('div[data-testid="stCode"] button, div[data-testid="stCode"] [data-testid="stBaseButton-elementToolbar"], .stCopyButton');
+              codeBtns.forEach(btn => {
+                btn.removeAttribute('title');
+                const target = btn.closest('[data-testid="stTooltipHoverTarget"]') || btn.parentElement;
+                if (target && target !== btn) {
+                  target.style.pointerEvents = 'none';
+                  btn.style.pointerEvents = 'auto';
+                }
+              });
+
+              const tooltips = doc.querySelectorAll('[data-testid="stTooltipContent"], [role="tooltip"], .stTooltipContent');
+              tooltips.forEach(t => {
+                const text = (t.textContent || '').trim().toLowerCase();
+                if (text.includes('copy to clipboard') || text === 'copied') {
+                  const container = t.closest('[class*="e1wa7l460"]') || t.parentElement || t;
+                  container.style.display = 'none';
+                  container.style.opacity = '0';
+                  container.style.visibility = 'hidden';
+                  container.style.pointerEvents = 'none';
+                }
+              });
+            }
+
+            suppressCopyTooltips();
+            const observer = new MutationObserver(() => {
+              suppressCopyTooltips();
+            });
+            observer.observe(doc.body, { childList: true, subtree: true });
+          } catch(e) {}
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def search_location_area() -> tuple[AnalysisArea | None, str | None]:
     lang = st.session_state.get("selected_language", "en")
     st.write("Search any town, agricultural region, landmark, or farm address worldwide.")
@@ -1624,6 +1671,26 @@ st.markdown(
         color: var(--signal) !important;
       }
 
+      /* Suppress floating "Copy to clipboard" hover tooltips in code blocks */
+      div[data-testid="stCode"] [data-testid="stTooltipHoverTarget"],
+      div[data-testid="stCode"] .stTooltipHoverTarget {
+        pointer-events: none !important;
+      }
+      div[data-testid="stCode"] [data-testid="stTooltipHoverTarget"] button,
+      div[data-testid="stCode"] button {
+        pointer-events: auto !important;
+      }
+      div[data-testid="stCode"] [data-testid="stTooltipContent"],
+      div[data-testid="stCode"] .stTooltipContent,
+      div[data-testid="stCode"] [role="tooltip"],
+      div[data-testid="stCode"] [class*="e1wa7l460"],
+      div[data-testid="stCode"] [class*="e1wa7l463"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+
       /* Dataframes / Tables */
       div[data-testid="stDataFrame"] {
         border: 1px solid var(--line) !important;
@@ -1991,6 +2058,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+render_copy_tooltip_suppression_script()
+
 
 def render_footer(current_lang: str) -> None:
     """Renders the comprehensive application footer with provenance, disclaimers, and links."""
@@ -2185,6 +2254,7 @@ else:
                 f"Center: [{latitude:.6f}, {longitude:.6f}] | Size: {area.formatted_area()}",
                 language="yaml",
             )
+            render_copy_tooltip_suppression_script()
         with c2:
             st.download_button(
                 "Export Field Boundary (GeoJSON)",
