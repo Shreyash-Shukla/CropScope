@@ -137,14 +137,14 @@ def render_search_autocomplete_script() -> None:
               dropdown.style.cssText = [
                 "position: absolute",
                 "z-index: 999999",
-                "background: #0e1117",
-                "border: 1px solid rgba(255, 106, 26, 0.4)",
-                "border-radius: 6px",
-                "box-shadow: 0 10px 28px rgba(0,0,0,0.65)",
+                "background: var(--ink-1, #0e1117)",
+                "border: 1px solid var(--signal, rgba(255, 106, 26, 0.4))",
+                "border-radius: 0px",
+                "box-shadow: 0 10px 28px rgba(0,0,0,0.25)",
                 "max-height: 280px",
                 "overflow-y: auto",
                 "display: none",
-                "font-family: ui-monospace, monospace, -apple-system, sans-serif",
+                "font-family: var(--font-mono, monospace)",
                 "font-size: 12.5px",
                 "box-sizing: border-box"
               ].join(";");
@@ -177,17 +177,18 @@ def render_search_autocomplete_script() -> None:
                 row.style.cssText = [
                   "padding: 8px 12px",
                   "cursor: pointer",
-                  "border-bottom: 1px solid rgba(255,255,255,0.06)",
+                  "border-bottom: 1px solid var(--line, rgba(255,255,255,0.06))",
                   "display: flex",
                   "justify-content: space-between",
                   "align-items: center",
-                  "color: #e6edf3",
+                  "color: var(--bone, #e6edf3)",
+                  "background: var(--ink-1, transparent)",
                   "transition: background 0.15s ease"
                 ].join(";");
                 const left = parentDoc.createElement("div");
-                left.innerHTML = `<span style="font-weight: 600; color: #ff6a1a;">📍 ${item.name}</span> <span style="color: #8b949e; font-size: 11.5px;">${[item.admin1, item.country].filter(Boolean).join(", ")}</span>`;
+                left.innerHTML = `<span style="font-weight: 600; color: var(--signal, #ff6a1a);">📍 ${item.name}</span> <span style="color: var(--bone-3, #8b949e); font-size: 11.5px;">${[item.admin1, item.country].filter(Boolean).join(", ")}</span>`;
                 const right = parentDoc.createElement("div");
-                right.style.cssText = "color: #7d8590; font-size: 11px; font-family: monospace; white-space: nowrap; margin-left: 8px;";
+                right.style.cssText = "color: var(--bone-3, #7d8590); font-size: 11px; font-family: monospace; white-space: nowrap; margin-left: 8px;";
                 right.textContent = `${item.latitude.toFixed(2)}°, ${item.longitude.toFixed(2)}°`;
                 row.appendChild(left);
                 row.appendChild(right);
@@ -206,7 +207,7 @@ def render_search_autocomplete_script() -> None:
               activeIndex = idx;
               const rows = dropdown.children;
               for (let i = 0; i < rows.length; i++) {
-                rows[i].style.background = i === activeIndex ? "rgba(255, 106, 26, 0.22)" : "transparent";
+                rows[i].style.background = i === activeIndex ? "var(--ink-2, rgba(255, 106, 26, 0.22))" : "var(--ink-1, transparent)";
               }
             }
 
@@ -1324,6 +1325,45 @@ st.markdown(
       }
       input:focus, div[data-baseweb="input"]:focus-within {
         border-color: var(--signal) !important;
+      }
+
+      /* BaseWeb Dropdown Menus & Popovers */
+      div[data-baseweb="popover"],
+      div[data-baseweb="popover"] > div,
+      div[data-baseweb="menu"],
+      ul[data-testid="stSelectboxVirtualDropdown"],
+      ul[role="listbox"],
+      div[role="listbox"] {
+        background-color: var(--ink-1) !important;
+        border: 1px solid var(--line-strong) !important;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25) !important;
+        color: var(--bone) !important;
+        border-radius: 0px !important;
+      }
+      li[data-baseweb="menu-item"],
+      li[role="option"],
+      div[role="option"] {
+        background-color: var(--ink-1) !important;
+        color: var(--bone) !important;
+        font-family: var(--font-mono) !important;
+        font-size: 12px !important;
+        padding: 8px 12px !important;
+        transition: background 100ms ease, color 100ms ease !important;
+      }
+      li[data-baseweb="menu-item"]:hover,
+      li[role="option"]:hover,
+      div[role="option"]:hover,
+      li[data-baseweb="menu-item"][aria-selected="true"],
+      li[role="option"][aria-selected="true"],
+      div[role="option"][aria-selected="true"] {
+        background-color: var(--ink-2) !important;
+        color: var(--signal) !important;
+      }
+      div[data-baseweb="select"] svg {
+        fill: var(--bone-2) !important;
+      }
+      div[data-baseweb="select"] span {
+        color: var(--bone) !important;
       }
 
       /* Metrics / Readouts */

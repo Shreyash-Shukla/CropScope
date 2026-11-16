@@ -60,6 +60,16 @@ class AppUITests(unittest.TestCase):
         theme_sel.select("Light").run()
         self.assertEqual(at.session_state["theme"], "Light")
 
+    def test_dropdown_options_available_in_both_themes(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        crop_sel = at.selectbox(key="crop_select")
+        self.assertGreater(len(crop_sel.options), 1)
+        at.selectbox(key="theme_selector").select("Light").run()
+        self.assertEqual(at.session_state["theme"], "Light")
+        crop_sel = at.selectbox(key="crop_select")
+        self.assertGreater(len(crop_sel.options), 1)
+
     def test_language_selector_updates_session_state(self):
         at = AppTest.from_file(APP_PATH, default_timeout=15)
         at.run()
