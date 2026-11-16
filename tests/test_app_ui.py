@@ -143,6 +143,7 @@ class AppUITests(unittest.TestCase):
         style_markdowns = [m.value for m in at.markdown if "<style>" in m.value]
         combined_css = " ".join(style_markdowns)
         self.assertIn('div[data-testid="stCode"]', combined_css)
+        self.assertIn('div[data-testid="stCode"] button', combined_css)
         self.assertIn('div[data-testid="stElementToolbarButtonContainer"]', combined_css)
         self.assertIn('button[kind="elementToolbar"]', combined_css)
         self.assertIn('fill: var(--bone)', combined_css)

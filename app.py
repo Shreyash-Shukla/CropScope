@@ -1546,23 +1546,32 @@ st.markdown(
       }
       div[data-testid="stElementToolbarButtonContainer"],
       div.stElementToolbar > div,
-      div[data-testid="stElementToolbar"] > div {
+      div[data-testid="stElementToolbar"] > div,
+      div[data-testid="stCode"] div:has(> button),
+      div[data-testid="stCode"] div:has(> div > button),
+      div[data-testid="stCode"] [data-testid="stElementToolbarButton"],
+      div[data-testid="stCode"] [class*="ej556a85"],
+      div[data-testid="stCode"] [class*="e1db0a191"] {
         background-color: var(--ink-2) !important;
         border: 1px solid var(--line-strong) !important;
         border-radius: 0px !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
         padding: 2px !important;
       }
+      div[data-testid="stCode"] button,
+      div[data-testid="stCode"] button[data-testid="stBaseButton-elementToolbar"],
+      div[data-testid="stCode"] [data-testid="stElementToolbarButton"] button,
       div[data-testid="stElementToolbarButton"],
       div[data-testid="stElementToolbarButton"] button,
       div[data-testid="stElementToolbar"] button,
       button[data-testid="stElementToolbarButton"],
+      button[data-testid="stBaseButton-elementToolbar"],
       button[kind="elementToolbar"],
       button[title*="Copy" i],
       button[aria-label*="Copy" i],
       .stCopyButton,
       .stMenuVersionCopyButton {
-        background-color: transparent !important;
+        background-color: var(--ink-2) !important;
         color: var(--bone) !important;
         border: none !important;
         border-radius: 0px !important;
@@ -1570,20 +1579,27 @@ st.markdown(
         box-shadow: none !important;
         transition: background-color 100ms ease, color 100ms ease !important;
       }
+      div[data-testid="stCode"] button:hover,
+      div[data-testid="stCode"] button[data-testid="stBaseButton-elementToolbar"]:hover,
+      div[data-testid="stCode"] [data-testid="stElementToolbarButton"] button:hover,
       div[data-testid="stElementToolbarButton"]:hover,
       div[data-testid="stElementToolbarButton"] button:hover,
       div[data-testid="stElementToolbar"] button:hover,
       button[kind="elementToolbar"]:hover,
+      button[data-testid="stBaseButton-elementToolbar"]:hover,
       button[title*="Copy" i]:hover,
       button[aria-label*="Copy" i]:hover,
       .stCopyButton:hover {
         background-color: var(--ink-0) !important;
         color: var(--signal) !important;
       }
+      div[data-testid="stCode"] button svg,
+      div[data-testid="stCode"] [data-testid="stElementToolbarButtonIcon"] svg,
       div[data-testid="stElementToolbar"] svg,
       div[data-testid="stElementToolbarButton"] svg,
       div[data-testid="stElementToolbarButtonIcon"] svg,
       button[kind="elementToolbar"] svg,
+      button[data-testid="stBaseButton-elementToolbar"] svg,
       button[title*="Copy" i] svg,
       button[aria-label*="Copy" i] svg,
       .stCopyButton svg,
@@ -1593,10 +1609,14 @@ st.markdown(
         stroke: none !important;
         transition: fill 100ms ease, color 100ms ease !important;
       }
+      div[data-testid="stCode"] button:hover svg,
+      div[data-testid="stCode"] button[data-testid="stBaseButton-elementToolbar"]:hover svg,
+      div[data-testid="stCode"] [data-testid="stElementToolbarButton"]:hover svg,
       div[data-testid="stElementToolbarButton"]:hover svg,
       div[data-testid="stElementToolbarButton"] button:hover svg,
       div[data-testid="stElementToolbar"] button:hover svg,
       button[kind="elementToolbar"]:hover svg,
+      button[data-testid="stBaseButton-elementToolbar"]:hover svg,
       button[title*="Copy" i]:hover svg,
       button[aria-label*="Copy" i]:hover svg,
       .stCopyButton:hover svg {
