@@ -1,5 +1,5 @@
 """Exercise three distinct selected rectangles against live public sources."""
-
+"""This script does the live check"""
 import sys
 import time
 from pathlib import Path
