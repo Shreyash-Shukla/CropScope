@@ -483,10 +483,6 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     <span class="corner br"></span>
   </div>
 
-  <div id="scroll-hint" style="position: absolute; top: 72px; left: 50%; transform: translateX(-50%); font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.08em; background: rgba(7, 8, 10, 0.90); color: #ff6a1a; border: 1px solid rgba(255, 106, 26, 0.45); padding: 5px 14px; pointer-events: none; opacity: 0; transition: opacity 0.25s ease; z-index: 1000; text-transform: uppercase;">
-    Hold Ctrl + Scroll to zoom globe
-  </div>
-
   <!-- Top Header Bar (HUD Top) -->
   <div class="hud-top-bar">
     <div class="hud-top-left">
@@ -1420,33 +1416,13 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
     container.addEventListener('pointerup', onPointerEnd);
     container.addEventListener('pointercancel', onPointerEnd);
 
-    let hintTimeout = null;
-    function showScrollHint() {
-      const hint = document.getElementById('scroll-hint');
-      if (!hint) return;
-      hint.style.opacity = '1';
-      clearTimeout(hintTimeout);
-      hintTimeout = setTimeout(() => {
-        hint.style.opacity = '0';
-      }, 1400);
-    }
-
     container.addEventListener('wheel', (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
-        const clampedDelta = Math.max(-200, Math.min(200, e.deltaY * unit));
-        controlInput.zoom += clampedDelta * 0.0009;
-        controlInput.gestureId++;
-        markInput();
-      } else {
-        showScrollHint();
-        try {
-          if (window.parent && window.parent !== window) {
-            window.parent.scrollBy({ top: e.deltaY, behavior: 'auto' });
-          }
-        } catch (err) {}
-      }
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+      const clampedDelta = Math.max(-200, Math.min(200, e.deltaY * unit));
+      controlInput.zoom += clampedDelta * 0.0009;
+      controlInput.gestureId++;
+      markInput();
     }, { passive: false });
 
     container.addEventListener('contextmenu', (e) => e.preventDefault());

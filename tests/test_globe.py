@@ -156,8 +156,11 @@ class GlobeAstronomicalTests(unittest.TestCase):
         self.assertIn("pointerdown", html)
         self.assertIn("pointermove", html)
         self.assertIn("touch-action: none", html)
-        # Verify wheel input is clamped to prevent sudden sensitivity spikes
+        # Verify wheel input is clamped to prevent sudden sensitivity spikes and allows direct scroll zoom
         self.assertIn("clampedDelta", html)
+        self.assertIn("controlInput.zoom += clampedDelta", html)
+        self.assertNotIn("scroll-hint", html)
+        self.assertNotIn("showScrollHint", html)
 
     def test_radians_per_pixel_sensitivity_scaling_math(self):
         fov_deg = 38.0
