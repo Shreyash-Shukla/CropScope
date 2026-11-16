@@ -1573,25 +1573,65 @@ st.markdown(
         fill: var(--signal) !important;
       }
 
-      /* Quick Suggestion Pills */
-      div[data-testid="stPills"] button {
+      /* Quick Suggestion Pills & Button Groups (st.pills) */
+      div[data-testid="stButtonGroup"],
+      div.stButtonGroup,
+      div[data-testid="stPills"] {
+        background: transparent !important;
+      }
+      div[data-testid="stButtonGroup"] button,
+      div.stButtonGroup button,
+      div[data-testid="stPills"] button,
+      button[data-variant="pills"],
+      button[data-variant="segmented_control"] {
         background-color: var(--ink-1) !important;
-        color: var(--bone-2) !important;
+        color: var(--bone) !important;
         border: 1px solid var(--line-strong) !important;
         border-radius: 0px !important;
         font-family: var(--font-mono) !important;
         font-size: 11px !important;
+        transition: all 120ms ease !important;
       }
-      div[data-testid="stPills"] button:hover {
+      div[data-testid="stButtonGroup"] button *,
+      div.stButtonGroup button *,
+      div[data-testid="stPills"] button *,
+      button[data-variant="pills"] *,
+      button[data-variant="segmented_control"] * {
+        color: var(--bone) !important;
+      }
+      div[data-testid="stButtonGroup"] button:hover,
+      div.stButtonGroup button:hover,
+      div[data-testid="stPills"] button:hover,
+      button[data-variant="pills"]:hover,
+      button[data-variant="segmented_control"]:hover {
         background-color: var(--ink-2) !important;
         border-color: var(--signal) !important;
+      }
+      div[data-testid="stButtonGroup"] button:hover *,
+      div.stButtonGroup button:hover *,
+      div[data-testid="stPills"] button:hover *,
+      button[data-variant="pills"]:hover *,
+      button[data-variant="segmented_control"]:hover * {
         color: var(--signal) !important;
       }
-      div[data-testid="stPills"] button[aria-pressed="true"],
-      div[data-testid="stPills"] button[data-selected="true"] {
+      div[data-testid="stButtonGroup"] button[data-selected="true"],
+      div[data-testid="stButtonGroup"] button[aria-checked="true"],
+      div[data-testid="stButtonGroup"] button[aria-pressed="true"],
+      div.stButtonGroup button[data-selected="true"],
+      div[data-testid="stPills"] button[data-selected="true"],
+      button[data-variant="pills"][data-selected="true"],
+      button[data-variant="segmented_control"][data-selected="true"] {
         background-color: var(--signal) !important;
-        color: var(--ink-0) !important;
         border-color: var(--signal) !important;
+      }
+      div[data-testid="stButtonGroup"] button[data-selected="true"] *,
+      div[data-testid="stButtonGroup"] button[aria-checked="true"] *,
+      div[data-testid="stButtonGroup"] button[aria-pressed="true"] *,
+      div.stButtonGroup button[data-selected="true"] *,
+      div[data-testid="stPills"] button[data-selected="true"] *,
+      button[data-variant="pills"][data-selected="true"] *,
+      button[data-variant="segmented_control"][data-selected="true"] * {
+        color: var(--ink-0) !important;
       }
 
       /* Watched.earth Hero Section */
