@@ -1239,11 +1239,28 @@ st.markdown(
       }
 
       /* ── Watched.earth Hard Rules (DESIGN §1) ── */
-      /* Pure ink background & bone typography */
-      .stApp {
+      /* Global Smooth Scrolling & Momentum */
+      html, body, .stApp {
         background-color: var(--ink-0) !important;
         color: var(--bone) !important;
         font-family: var(--font-sans) !important;
+        scroll-behavior: smooth !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+
+      /* Global Watched.earth Custom Scrollbars */
+      ::-webkit-scrollbar {
+        width: 7px;
+        height: 7px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--ink-0);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--line-strong);
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--signal);
       }
 
       /* Anti-slop: zero border radius everywhere */
