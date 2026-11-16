@@ -1521,10 +1521,146 @@ st.markdown(
         background-color: var(--signal);
         box-shadow: 0 0 6px var(--signal);
       }
+
+      /* App Footer Bar */
+      .app-footer-container {
+        margin-top: 48px;
+        padding-top: 24px;
+        border-top: 1px solid var(--line-strong);
+        background: var(--ink-0);
+        font-family: var(--font-sans);
+      }
+      .app-footer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+      .app-footer-col-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--signal);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .app-footer-text {
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--bone-2);
+        margin-bottom: 8px;
+      }
+      .app-footer-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .app-footer-list li {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.8;
+        color: var(--bone-3);
+      }
+      .app-footer-list a {
+        color: var(--bone-2);
+        text-decoration: none;
+        transition: color 120ms ease;
+      }
+      .app-footer-list a:hover {
+        color: var(--signal);
+      }
+      .app-footer-bottom {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 0;
+        border-top: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--bone-3);
+        gap: 12px;
+      }
+      .app-footer-disclaimer {
+        background: var(--ink-1);
+        border: 1px solid var(--line);
+        padding: 10px 14px;
+        margin-bottom: 20px;
+        font-size: 11px;
+        font-family: var(--font-mono);
+        color: var(--bone-3);
+        line-height: 1.5;
+      }
+      .app-footer-disclaimer strong {
+        color: var(--bone-2);
+      }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+def render_footer(current_lang: str) -> None:
+    """Renders the comprehensive application footer with provenance, disclaimers, and links."""
+    st.markdown(
+        f"""
+        <footer class="app-footer-container" data-testid="cropscope-footer">
+          <div class="app-footer-disclaimer">
+            <strong>⚠️ HONEST SCIENTIFIC BOUNDARY / अस्वीकरण:</strong>
+            CropScope is a decision-support prototype. Multispectral vegetation indices (NDVI) indicate canopy greenness and vigor, not specific plant diseases or nutrient deficiencies. Weather forecasts are provided via numerical weather models. This tool does not replace qualified in-field agronomic inspection, soil testing, or local extension advice.
+          </div>
+          <div class="app-footer-grid">
+            <div>
+              <div class="app-footer-col-title">🛰️ CropScope Platform</div>
+              <div class="app-footer-text">
+                Hyperlocal precision farming decision support combining Copernicus Sentinel-2 satellite imagery, gridded agrometeorology, and AI-assisted agronomy.
+              </div>
+              <div class="app-footer-text" style="font-family: var(--font-mono); font-size: 11px; color: var(--bone-3);">
+                Watched.earth Design System &bull; Phase 0–6 Complete
+              </div>
+            </div>
+            <div>
+              <div class="app-footer-col-title">📡 Data Provenance</div>
+              <ul class="app-footer-list">
+                <li>&bull; ESA Copernicus Sentinel-2 L2A (10m)</li>
+                <li>&bull; Element 84 Earth Search STAC Catalog</li>
+                <li>&bull; Open-Meteo Global Forecast Models</li>
+                <li>&bull; NASA GIBS &amp; Esri World Imagery</li>
+                <li>&bull; Google Gemini 3.1 Flash-Lite Advisory</li>
+              </ul>
+            </div>
+            <div>
+              <div class="app-footer-col-title">🌾 Agronomic Engine</div>
+              <ul class="app-footer-list">
+                <li>&bull; NDVI Cloud-Masked Canopy Analysis</li>
+                <li>&bull; 7-Day Cumulative Water Balance (P &minus; ET₀)</li>
+                <li>&bull; Daily Fieldwork Suitability Windows</li>
+                <li>&bull; Kisan Mitra Multilingual Chatbot (10 Langs)</li>
+                <li>&bull; GeoJSON Boundary &amp; Advisory Report Export</li>
+              </ul>
+            </div>
+            <div>
+              <div class="app-footer-col-title">🔗 Project &amp; Links</div>
+              <ul class="app-footer-list">
+                <li><a href="https://github.com/Shreyash-Shukla/CropScope" target="_blank">💻 GitHub Repository</a></li>
+                <li><a href="https://open-meteo.com" target="_blank">🌤️ Open-Meteo Documentation</a></li>
+                <li><a href="https://sentinels.copernicus.eu" target="_blank">🛰️ Copernicus Sentinel Handbook</a></li>
+                <li><a href="#top">↑ Return to Top</a></li>
+              </ul>
+            </div>
+          </div>
+          <div class="app-footer-bottom">
+            <div>&copy; 2026 CropScope &bull; Built by Shreyash Shukla &amp; Team &bull; Open-Source Agri-Tech</div>
+            <div>STATUS: ALL SYSTEMS NOMINAL &bull; v1.2.0-RELEASE</div>
+          </div>
+        </footer>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_header(current_lang: str) -> None:
@@ -1742,3 +1878,5 @@ elif st.session_state.get("analysis_outcome"):
     show_suggestions(outcome)
     show_export_section(outcome)
     show_kisan_mitra_chat(outcome)
+
+render_footer(current_lang)

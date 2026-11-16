@@ -42,6 +42,15 @@ class AppUITests(unittest.TestCase):
         self.assertIn("SENTINEL-2", header_markdown[0])
         self.assertIn("OPEN-METEO", header_markdown[0])
 
+    def test_footer_renders(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        footer_markdown = [m.value for m in at.markdown if 'data-testid="cropscope-footer"' in m.value]
+        self.assertEqual(len(footer_markdown), 1)
+        self.assertIn("CROPSCOPE", footer_markdown[0].upper())
+        self.assertIn("DATA PROVENANCE", footer_markdown[0].upper())
+        self.assertIn("HONEST SCIENTIFIC BOUNDARY", footer_markdown[0].upper())
+
     def test_language_selector_updates_session_state(self):
         at = AppTest.from_file(APP_PATH, default_timeout=15)
         at.run()
