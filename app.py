@@ -1181,7 +1181,9 @@ st.set_page_config(
     layout="wide",
 )
 
-current_theme = st.session_state.get("theme_selector") or st.session_state.get("theme", "Dark")
+if "theme" not in st.session_state:
+    st.session_state["theme"] = "Dark"
+current_theme = st.session_state.get("theme_selector") or st.session_state["theme"]
 st.session_state["theme"] = current_theme
 
 if current_theme == "Light":
@@ -1729,18 +1731,20 @@ render_header(current_lang)
 
 hero_col, theme_col, lang_col = st.columns([2.6, 0.7, 0.7])
 with theme_col:
+    def _on_theme_change() -> None:
+        st.session_state["theme"] = st.session_state["theme_selector"]
+
     theme_options = ["Dark", "Light"]
-    cur_theme_idx = 0 if st.session_state.get("theme", "Dark") == "Dark" else 1
-    selected_theme = st.selectbox(
+    active_theme = st.session_state.get("theme", "Dark")
+    cur_theme_idx = theme_options.index(active_theme) if active_theme in theme_options else 0
+    st.selectbox(
         "🌓 Theme / थीम",
         theme_options,
         index=cur_theme_idx,
         key="theme_selector",
+        on_change=_on_theme_change,
         help="Switch between Dark and Light mode interface themes.",
     )
-    if st.session_state.get("theme") != selected_theme:
-        st.session_state["theme"] = selected_theme
-        st.rerun()
 
 with lang_col:
     lang_labels = get_language_names()
