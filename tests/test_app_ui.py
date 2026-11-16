@@ -33,6 +33,15 @@ class AppUITests(unittest.TestCase):
         at.pills[0].set_value("🌾 Karnal, India").run()
         self.assertEqual(at.text_input(key="location_search_input").value, "Karnal, Haryana, India")
 
+    def test_header_renders(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        header_markdown = [m.value for m in at.markdown if 'data-testid="cropscope-header"' in m.value]
+        self.assertEqual(len(header_markdown), 1)
+        self.assertIn("CROPSCOPE", header_markdown[0].upper())
+        self.assertIn("SENTINEL-2", header_markdown[0])
+        self.assertIn("OPEN-METEO", header_markdown[0])
+
     def test_language_selector_updates_session_state(self):
         at = AppTest.from_file(APP_PATH, default_timeout=15)
         at.run()

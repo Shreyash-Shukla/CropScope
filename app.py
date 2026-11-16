@@ -1442,10 +1442,122 @@ st.markdown(
         line-height: 1.45;
         margin: 0;
       }
+
+      /* App Header Bar */
+      .app-header-container {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 16px;
+        margin-bottom: 20px;
+        background-color: var(--ink-1);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--signal);
+        gap: 12px;
+      }
+      .app-header-brand-wrap {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .app-header-icon {
+        font-size: 24px;
+        line-height: 1;
+      }
+      .app-header-title {
+        font-family: var(--font-mono);
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        color: var(--bone);
+        text-transform: uppercase;
+      }
+      .app-header-badge {
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        background: rgba(255, 106, 26, 0.15);
+        color: var(--signal);
+        border: 1px solid rgba(255, 106, 26, 0.35);
+        padding: 2px 7px;
+        text-transform: uppercase;
+      }
+      .app-header-tagline {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--bone-3);
+        letter-spacing: 0.04em;
+      }
+      .app-header-telemetry {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .telemetry-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        color: var(--bone-2);
+        background: var(--ink-0);
+        border: 1px solid var(--line);
+        padding: 4px 9px;
+        text-transform: uppercase;
+      }
+      .pulse-dot-live {
+        width: 7px;
+        height: 7px;
+        background-color: #10b981;
+        box-shadow: 0 0 6px #10b981;
+      }
+      .pulse-dot-ai {
+        width: 7px;
+        height: 7px;
+        background-color: var(--signal);
+        box-shadow: 0 0 6px var(--signal);
+      }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+def render_header(current_lang: str) -> None:
+    """Renders the top application telemetry and branding header."""
+    app_title = t("app_title", current_lang)
+    tagline = t("app_subtitle", current_lang)
+    st.markdown(
+        f"""
+        <div class="app-header-container" data-testid="cropscope-header">
+          <div class="app-header-brand-wrap">
+            <span class="app-header-icon">🛰️</span>
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="app-header-title">{app_title}</span>
+                <span class="app-header-badge">LIVE // v1.2</span>
+              </div>
+              <div class="app-header-tagline">{tagline}</div>
+            </div>
+          </div>
+          <div class="app-header-telemetry">
+            <span class="telemetry-chip"><span class="pulse-dot-live"></span> STAC / SENTINEL-2 L2A</span>
+            <span class="telemetry-chip"><span class="pulse-dot-live"></span> OPEN-METEO GLOBAL</span>
+            <span class="telemetry-chip"><span class="pulse-dot-ai"></span> KISAN MITRA AI</span>
+            <span class="telemetry-chip" style="color: var(--bone-3);">ESA COPERNICUS &bull; NASA GIBS</span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+current_lang = st.session_state.get("selected_language", "en")
+render_header(current_lang)
 
 hero_col, lang_col = st.columns([3, 1])
 with lang_col:
