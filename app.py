@@ -1400,6 +1400,54 @@ st.markdown(
         background-color: var(--ink-1) !important;
         border: 1px solid var(--line) !important;
       }
+      div[data-testid="stExpander"] details {
+        border-radius: 0px !important;
+        background-color: var(--ink-1) !important;
+      }
+      div[data-testid="stExpander"] summary {
+        color: var(--bone) !important;
+        font-family: var(--font-mono) !important;
+        font-size: 11px !important;
+        letter-spacing: 0.05em !important;
+        text-transform: uppercase !important;
+      }
+      div[data-testid="stExpander"] summary svg {
+        fill: var(--bone-2) !important;
+      }
+      div[data-testid="stExpander"] div[data-testid="stExpanderDetails"] {
+        background-color: var(--ink-1) !important;
+        color: var(--bone) !important;
+        border-top: 1px solid var(--line) !important;
+      }
+
+      /* Streamlit Alerts & Status Widgets */
+      div[data-testid="stAlert"] {
+        background-color: var(--ink-1) !important;
+        border: 1px solid var(--line-strong) !important;
+        color: var(--bone) !important;
+        border-radius: 0px !important;
+      }
+      div[data-testid="stAlert"] p, div[data-testid="stAlert"] span, div[data-testid="stAlert"] div {
+        color: var(--bone) !important;
+      }
+      div[data-testid="stStatusWidget"] {
+        background-color: var(--ink-1) !important;
+        border: 1px solid var(--line) !important;
+        color: var(--bone) !important;
+        border-radius: 0px !important;
+      }
+      div[data-testid="stStatusWidget"] * {
+        color: var(--bone) !important;
+      }
+
+      /* Code blocks */
+      pre, code, div[data-testid="stCode"] {
+        background-color: var(--ink-1) !important;
+        color: var(--bone) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 0px !important;
+        font-family: var(--font-mono) !important;
+      }
 
       /* Dataframes / Tables */
       div[data-testid="stDataFrame"] {
@@ -1432,23 +1480,25 @@ st.markdown(
       }
 
       /* Chatbot smooth scroll styling */
-      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"]) {
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"]),
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatInput"]) {
         scroll-behavior: smooth !important;
         -webkit-overflow-scrolling: touch !important;
         border: 1px solid var(--line) !important;
         background-color: var(--ink-0) !important;
         padding: 12px 14px !important;
+        border-radius: 0px !important;
       }
-      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"])::-webkit-scrollbar {
+      div[data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar {
         width: 6px;
       }
-      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"])::-webkit-scrollbar-track {
+      div[data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-track {
         background: var(--ink-1);
       }
-      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"])::-webkit-scrollbar-thumb {
+      div[data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-thumb {
         background: var(--line-strong);
       }
-      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"])::-webkit-scrollbar-thumb:hover {
+      div[data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-thumb:hover {
         background: var(--signal);
       }
       div[data-testid="stChatMessage"] {
@@ -1460,13 +1510,62 @@ st.markdown(
         font-family: var(--font-sans) !important;
         font-size: 13.5px !important;
         line-height: 1.5 !important;
+        color: var(--bone) !important;
+      }
+      div[data-testid="stChatMessage"] div[data-testid="stChatMessageContent"] {
+        color: var(--bone) !important;
+      }
+      div[data-testid="stChatMessage"] div[data-testid="stChatMessageContent"] * {
+        color: var(--bone) !important;
       }
       div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li {
         color: var(--bone) !important;
       }
-      div[data-testid="stChatInput"] {
+
+      /* Chat Input Bar */
+      div[data-testid="stChatInput"],
+      div[data-testid="stChatInput"] > div,
+      div[data-testid="stChatInput"] div[data-baseweb="base-input"],
+      div[data-testid="stChatInput"] textarea {
+        background-color: var(--ink-1) !important;
+        color: var(--bone) !important;
+        border: 1px solid var(--line-strong) !important;
         border-radius: 0px !important;
-        margin-top: 8px !important;
+        box-shadow: none !important;
+        font-family: var(--font-sans) !important;
+        margin-top: 4px !important;
+      }
+      div[data-testid="stChatInput"] textarea::placeholder {
+        color: var(--bone-3) !important;
+      }
+      div[data-testid="stChatInput"] button {
+        background-color: transparent !important;
+        color: var(--signal) !important;
+        border: none !important;
+      }
+      div[data-testid="stChatInput"] button svg {
+        fill: var(--signal) !important;
+      }
+
+      /* Quick Suggestion Pills */
+      div[data-testid="stPills"] button {
+        background-color: var(--ink-1) !important;
+        color: var(--bone-2) !important;
+        border: 1px solid var(--line-strong) !important;
+        border-radius: 0px !important;
+        font-family: var(--font-mono) !important;
+        font-size: 11px !important;
+      }
+      div[data-testid="stPills"] button:hover {
+        background-color: var(--ink-2) !important;
+        border-color: var(--signal) !important;
+        color: var(--signal) !important;
+      }
+      div[data-testid="stPills"] button[aria-pressed="true"],
+      div[data-testid="stPills"] button[data-selected="true"] {
+        background-color: var(--signal) !important;
+        color: var(--ink-0) !important;
+        border-color: var(--signal) !important;
       }
 
       /* Watched.earth Hero Section */

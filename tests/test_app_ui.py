@@ -103,6 +103,22 @@ class AppUITests(unittest.TestCase):
         self.assertEqual(at.session_state["kisan_chat_messages"][1]["role"], "assistant")
         self.assertTrue(len(at.session_state["kisan_chat_messages"][1]["content"]) > 0)
 
+    def test_chat_and_pills_in_light_mode(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=35)
+        at.run()
+        at.selectbox(key="theme_selector").select("Light").run()
+        self.assertEqual(at.session_state["theme"], "Light")
+        at.radio[0].set_value("Use sample preset").run()
+        at.selectbox(key="crop_select").select("Wheat").run()
+        at.selectbox(key="growth_stage_select").select("Vegetative").run()
+        at.button[1].click().run()
+        self.assertIn("kisan_chat_messages", at.session_state)
+        pills = at.pills(key="kisan_quick_pills")
+        self.assertIsNotNone(pills)
+        self.assertGreater(len(pills.options), 0)
+        at.chat_input(key="kisan_chat_input").set_value("How is canopy health?").run()
+        self.assertGreaterEqual(len(at.session_state["kisan_chat_messages"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
