@@ -128,6 +128,15 @@ class AppUITests(unittest.TestCase):
         expanders = [e.label for e in at.expander if "SUB-METER OPTICAL FIELD INSPECTOR" in e.label]
         self.assertEqual(len(expanders), 1)
 
+    def test_expander_styling_rules(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        style_markdowns = [m.value for m in at.markdown if "<style>" in m.value]
+        combined_css = " ".join(style_markdowns)
+        self.assertIn('div[data-testid="stExpander"] summary', combined_css)
+        self.assertIn('background-color: var(--ink-2)', combined_css)
+        self.assertIn('border-bottom: 1px solid var(--line)', combined_css)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1422,28 +1422,71 @@ st.markdown(
       }
 
       /* Expanders */
-      div[data-testid="stExpander"] {
+      div[data-testid="stExpander"],
+      div.stExpander {
         background-color: var(--ink-1) !important;
-        border: 1px solid var(--line) !important;
+        border: 1px solid var(--line-strong) !important;
+        border-radius: 0px !important;
+        margin-bottom: 12px !important;
       }
-      div[data-testid="stExpander"] details {
+      div[data-testid="stExpander"] details,
+      div.stExpander details {
         border-radius: 0px !important;
         background-color: var(--ink-1) !important;
+        border: none !important;
       }
-      div[data-testid="stExpander"] summary {
+      div[data-testid="stExpander"] summary,
+      div.stExpander summary {
+        background-color: var(--ink-2) !important;
         color: var(--bone) !important;
         font-family: var(--font-mono) !important;
-        font-size: 11px !important;
+        font-size: 11.5px !important;
+        font-weight: 500 !important;
         letter-spacing: 0.05em !important;
         text-transform: uppercase !important;
+        border-bottom: 1px solid var(--line) !important;
+        border-radius: 0px !important;
+        padding: 10px 14px !important;
+        cursor: pointer !important;
+        transition: background-color 120ms ease, color 120ms ease !important;
       }
-      div[data-testid="stExpander"] summary svg {
+      div[data-testid="stExpander"] summary:hover,
+      div[data-testid="stExpander"] summary:focus,
+      div[data-testid="stExpander"] summary:focus-visible,
+      div[data-testid="stExpander"] summary:active,
+      div.stExpander summary:hover,
+      div.stExpander summary:focus {
+        background-color: var(--ink-0) !important;
+        color: var(--signal) !important;
+      }
+      div[data-testid="stExpander"] summary *,
+      div.stExpander summary * {
+        color: var(--bone) !important;
+      }
+      div[data-testid="stExpander"] summary:hover *,
+      div.stExpander summary:hover * {
+        color: var(--signal) !important;
+      }
+      div[data-testid="stExpander"] summary svg,
+      div.stExpander summary svg {
         fill: var(--bone-2) !important;
+        color: var(--bone-2) !important;
+        transition: fill 120ms ease, color 120ms ease !important;
       }
-      div[data-testid="stExpander"] div[data-testid="stExpanderDetails"] {
+      div[data-testid="stExpander"] summary:hover svg,
+      div.stExpander summary:hover svg {
+        fill: var(--signal) !important;
+        color: var(--signal) !important;
+      }
+      div[data-testid="stExpander"] div[data-testid="stExpanderDetails"],
+      div.stExpander div[data-testid="stExpanderDetails"] {
         background-color: var(--ink-1) !important;
         color: var(--bone) !important;
-        border-top: 1px solid var(--line) !important;
+        border-top: none !important;
+        padding: 14px 16px !important;
+      }
+      div[data-testid="stExpander"] div[data-testid="stExpanderDetails"] * {
+        color: var(--bone) !important;
       }
 
       /* Streamlit Alerts & Status Widgets */
