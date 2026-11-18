@@ -1143,6 +1143,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
 
 
+@st.fragment
 def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
     lang = st.session_state.get("selected_language", "en")
 
@@ -1203,7 +1204,7 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
         if not st.session_state.kisan_chat_messages and not user_query:
             st.markdown(
                 f"""
-                <div style="text-align: center; padding: 40px 16px; color: var(--bone-3); font-family: var(--font-mono); font-size: 11.5px; border: 1px dashed var(--line); margin: 12px 0;">
+                <div class="cs-chat-placeholder" style="text-align: center; padding: 40px 16px; color: var(--bone-3); font-family: var(--font-mono); font-size: 11.5px; border: 1px dashed var(--line); margin: 12px 0;">
                   🌾 <strong style="color: var(--bone);">{t('kisan_mitra_title', lang)}</strong><br><br>
                   {t('kisan_mitra_caption', lang)}
                 </div>
@@ -1723,7 +1724,7 @@ st.markdown(
 
       /* Chatbot smooth scroll styling */
       div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatMessage"]),
-      div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stChatInput"]) {
+      div[data-testid="stVerticalBlockBorderWrapper"]:has(.cs-chat-placeholder) {
         scroll-behavior: smooth !important;
         -webkit-overflow-scrolling: touch !important;
         border: 1px solid var(--line) !important;
