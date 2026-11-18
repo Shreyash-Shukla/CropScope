@@ -1,6 +1,8 @@
 """Tests for CropScope authentication and session management.
 """
 
+import os
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -17,8 +19,14 @@ from auth import (
     logout_farmer,
     render_auth_drawer,
     render_auth_header_widget,
+    render_farmer_fields_selector,
+    render_save_field_widget,
     set_active_field,
 )
+from db.connection import init_db
+from db.farmers import create_farmer
+from db.fields import save_field
+from models import AnalysisArea
 
 
 class TestAuthSession(unittest.TestCase):
@@ -32,6 +40,7 @@ class TestAuthSession(unittest.TestCase):
             "language_selector",
             "toggle_farmer_account",
             "show_auth_panel",
+            "farmer_field_selector",
         ]:
             st.session_state.pop(key, None)
 
@@ -70,8 +79,35 @@ class TestAuthSession(unittest.TestCase):
         self.assertIsNone(get_active_field())
 
     def test_drawer_closed_by_default(self):
-        # Should not raise any errors when closed
         render_auth_drawer("en", is_open=False)
+
+    def test_farmer_fields_selector_empty_when_no_fields(self):
+        # When no fields exist for farmer, selector returns None
+        result = render_farmer_fields_selector("non-existent-farmer-id", "en")
+        self.assertIsNone(result)
+
+    def test_farmer_fields_selector_with_saved_field(self):
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        try:
+            init_db(tmp.name)
+            farmer = create_farmer("Harpreet Singh", phone_number="9988776655", mpin="1234", db_path=tmp.name)
+            saved_f = save_field(
+                farmer_id=farmer["id"],
+                name="Main Field",
+                bbox=(29.1, 76.8, 29.2, 76.9),
+                db_path=tmp.name,
+            )
+            with patch("auth.fields_ui.list_fields", return_value=[saved_f]):
+                # Test with default unselected index
+                res_none = render_farmer_fields_selector(farmer["id"], "en")
+                self.assertIsNone(res_none)
+        finally:
+            if os.path.exists(tmp.name):
+                try:
+                    os.remove(tmp.name)
+                except OSError:
+                    pass
 
 
 if __name__ == "__main__":

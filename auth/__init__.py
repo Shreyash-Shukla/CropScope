@@ -1,6 +1,10 @@
 """CropScope Farmer Authentication and Session Module.
 """
 
+from auth.fields_ui import (
+    render_farmer_fields_selector,
+    render_save_field_widget,
+)
 from auth.session import (
     SESSION_ACTIVE_CHAT_KEY,
     SESSION_ACTIVE_FIELD_KEY,
@@ -26,4 +30,6 @@ __all__ = [
     "set_active_field",
     "render_auth_header_widget",
     "render_auth_drawer",
+    "render_farmer_fields_selector",
+    "render_save_field_widget",
 ]

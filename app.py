@@ -61,10 +61,14 @@ from location import (
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
 from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
 from auth import (
+    get_active_field,
     get_current_farmer,
     is_authenticated,
     render_auth_drawer,
     render_auth_header_widget,
+    render_farmer_fields_selector,
+    render_save_field_widget,
+    set_active_field,
 )
 
 
@@ -2310,33 +2314,44 @@ render_auth_drawer(current_lang, show_auth)
 
 st.markdown('<div style="border-bottom: 1px solid var(--line); margin-bottom: 24px;"></div>', unsafe_allow_html=True)
 
-mode = st.radio(
-    t("choose_area_mode", current_lang),
-    ["Search location", "Enter coordinates", "Use my location", "Draw on map", "Use sample preset"],
-    format_func=lambda m: format_mode_label(m, current_lang),
-    horizontal=True,
-)
-if st.session_state.get("location_mode") != mode:
-    st.session_state.location_mode = mode
-    st.session_state.map_drawings = []
-if mode == "Search location":
-    area, location_error = search_location_area()
-elif mode == "Enter coordinates":
-    area, location_error = coordinate_area()
-elif mode == "Use my location":
-    area, location_error = my_location_area()
-elif mode == "Draw on map":
-    area, location_error = draw_area()
+current_farmer = get_current_farmer()
+saved_area = None
+if current_farmer:
+    saved_area = render_farmer_fields_selector(current_farmer["id"], current_lang)
+
+if saved_area:
+    area, location_error = saved_area, None
+    active_f = get_active_field()
+    field_title = f"🌾 {active_f.get('name', 'Saved Field')}" if active_f else "Saved Field"
+    preview_area(area, location_title=field_title)
 else:
-    preset_name = st.selectbox(
-        "Select sample farmland location",
-        list(SAMPLE_PRESETS.keys()),
-        index=0,
-        help="Pre-configured sample areas in India, Europe, and Australia.",
+    mode = st.radio(
+        t("choose_area_mode", current_lang),
+        ["Search location", "Enter coordinates", "Use my location", "Draw on map", "Use sample preset"],
+        format_func=lambda m: format_mode_label(m, current_lang),
+        horizontal=True,
     )
-    st.caption(f"Preset loaded: **{preset_name}**. You can also freely draw or enter coordinates anywhere.")
-    area, location_error = SAMPLE_PRESETS[preset_name], None
-    preview_area(area, location_title=preset_name)
+    if st.session_state.get("location_mode") != mode:
+        st.session_state.location_mode = mode
+        st.session_state.map_drawings = []
+    if mode == "Search location":
+        area, location_error = search_location_area()
+    elif mode == "Enter coordinates":
+        area, location_error = coordinate_area()
+    elif mode == "Use my location":
+        area, location_error = my_location_area()
+    elif mode == "Draw on map":
+        area, location_error = draw_area()
+    else:
+        preset_name = st.selectbox(
+            "Select sample farmland location",
+            list(SAMPLE_PRESETS.keys()),
+            index=0,
+            help="Pre-configured sample areas in India, Europe, and Australia.",
+        )
+        st.caption(f"Preset loaded: **{preset_name}**. You can also freely draw or enter coordinates anywhere.")
+        area, location_error = SAMPLE_PRESETS[preset_name], None
+        preview_area(area, location_title=preset_name)
 
 if location_error:
     st.warning(location_error)
@@ -2367,6 +2382,8 @@ else:
                 mime="application/geo+json",
                 use_container_width=True,
             )
+    if current_farmer and area:
+        render_save_field_widget(current_farmer["id"], area, current_lang)
 
 first, second = st.columns(2)
 with first:
