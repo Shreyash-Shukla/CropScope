@@ -9,3 +9,5 @@ __pycache__/
 cache/
 reference/
 scratch/
+*.db
+*.sqlite
