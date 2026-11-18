@@ -1,0 +1,29 @@
+"""CropScope Farmer Authentication and Session Module.
+"""
+
+from auth.session import (
+    SESSION_ACTIVE_CHAT_KEY,
+    SESSION_ACTIVE_FIELD_KEY,
+    SESSION_FARMER_KEY,
+    get_active_field,
+    get_current_farmer,
+    is_authenticated,
+    login_farmer,
+    logout_farmer,
+    set_active_field,
+)
+from auth.ui import render_auth_drawer, render_auth_header_widget
+
+__all__ = [
+    "SESSION_FARMER_KEY",
+    "SESSION_ACTIVE_FIELD_KEY",
+    "SESSION_ACTIVE_CHAT_KEY",
+    "get_current_farmer",
+    "is_authenticated",
+    "login_farmer",
+    "logout_farmer",
+    "get_active_field",
+    "set_active_field",
+    "render_auth_header_widget",
+    "render_auth_drawer",
+]

@@ -60,6 +60,12 @@ from location import (
 )
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
 from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
+from auth import (
+    get_current_farmer,
+    is_authenticated,
+    render_auth_drawer,
+    render_auth_header_widget,
+)
 
 
 def add_map_layers(map_obj: folium.Map) -> None:
@@ -2245,7 +2251,10 @@ def render_header(current_lang: str) -> None:
 current_lang = st.session_state.get("selected_language", "en")
 render_header(current_lang)
 
-hero_col, theme_col, lang_col = st.columns([2.6, 0.7, 0.7])
+hero_col, auth_col, theme_col, lang_col = st.columns([1.8, 1.0, 0.6, 0.6])
+with auth_col:
+    show_auth = render_auth_header_widget(current_lang)
+
 with theme_col:
     def _on_theme_change() -> None:
         st.session_state["theme"] = st.session_state["theme_selector"]
@@ -2296,6 +2305,8 @@ with hero_col:
         """,
         unsafe_allow_html=True,
     )
+
+render_auth_drawer(current_lang, show_auth)
 
 st.markdown('<div style="border-bottom: 1px solid var(--line); margin-bottom: 24px;"></div>', unsafe_allow_html=True)
 
