@@ -138,7 +138,7 @@ def render_search_autocomplete_script() -> None:
             dropdown = parentDoc.createElement("div");
             dropdown.id = "cs-search-autocomplete";
             dropdown.style.cssText = [
-              "position: absolute",
+              "position: fixed",
               "z-index: 999999",
               "background: var(--ink-1, #0c0e11)",
               "border: 1px solid var(--signal, #ff6a1a)",
@@ -152,6 +152,8 @@ def render_search_autocomplete_script() -> None:
               "box-sizing: border-box"
             ].join(";");
             parentDoc.body.appendChild(dropdown);
+          } else {
+            dropdown.style.position = "fixed";
           }
 
           let debounceTimer = null;
@@ -161,14 +163,13 @@ def render_search_autocomplete_script() -> None:
           let isSelecting = false;
 
           function positionDropdown(input) {
-            if (!input || dropdown.style.display === "none") return;
-            const rect = input.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) {
-              dropdown.style.display = "none";
-              return;
-            }
-            dropdown.style.top = (rect.bottom + window.parent.scrollY + 4) + "px";
-            dropdown.style.left = (rect.left + window.parent.scrollX) + "px";
+            const targetInput = input || getSearchInput();
+            if (!targetInput) return;
+            const rect = targetInput.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+            dropdown.style.position = "fixed";
+            dropdown.style.top = (rect.bottom + 4) + "px";
+            dropdown.style.left = rect.left + "px";
             dropdown.style.width = rect.width + "px";
           }
 
@@ -254,6 +255,7 @@ def render_search_autocomplete_script() -> None:
               dropdown.appendChild(row);
             });
             dropdown.style.display = "block";
+            positionDropdown(input);
           }
 
           function attachAutocomplete() {
@@ -352,7 +354,7 @@ def render_search_autocomplete_script() -> None:
 
             const onReposition = () => positionDropdown(input);
             window.parent.addEventListener("resize", onReposition);
-            window.parent.addEventListener("scroll", onReposition);
+            window.parent.addEventListener("scroll", onReposition, true);
           }
 
           attachAutocomplete();
