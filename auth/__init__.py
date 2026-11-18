@@ -5,6 +5,10 @@ from auth.fields_ui import (
     render_farmer_fields_selector,
     render_save_field_widget,
 )
+from auth.history import (
+    record_scan_outcome,
+    render_scan_history_timeline,
+)
 from auth.session import (
     SESSION_ACTIVE_CHAT_KEY,
     SESSION_ACTIVE_FIELD_KEY,
@@ -32,4 +36,6 @@ __all__ = [
     "render_auth_drawer",
     "render_farmer_fields_selector",
     "render_save_field_widget",
+    "record_scan_outcome",
+    "render_scan_history_timeline",
 ]

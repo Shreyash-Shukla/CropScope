@@ -61,15 +61,18 @@ from location import (
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
 from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
 from auth import (
+    SESSION_ACTIVE_CHAT_KEY,
     get_active_field,
     get_current_farmer,
     is_authenticated,
+    record_scan_outcome,
     render_auth_drawer,
     render_auth_header_widget,
     render_farmer_fields_selector,
     render_save_field_widget,
     set_active_field,
 )
+from db.chat import create_chat_session, get_chat_history, save_chat_message
 
 
 def add_map_layers(map_obj: folium.Map) -> None:
@@ -1268,6 +1271,24 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
     if "kisan_chat_messages" not in st.session_state:
         st.session_state.kisan_chat_messages = []
 
+    farmer = get_current_farmer()
+    active_field = get_active_field()
+    field_id = active_field["id"] if active_field else None
+    active_scan_id = st.session_state.get("active_scan_id")
+
+    # If farmer is logged in and no active chat session exists yet, initialize or load it
+    if farmer:
+        if SESSION_ACTIVE_CHAT_KEY not in st.session_state or not st.session_state[SESSION_ACTIVE_CHAT_KEY]:
+            title = f"{outcome.request.crop} Advisory"
+            try:
+                sess = create_chat_session(farmer["id"], title, field_id=field_id, scan_id=active_scan_id, language=lang)
+                st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess["id"]
+                history = get_chat_history(sess["id"])
+                if history and not st.session_state.kisan_chat_messages:
+                    st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
+            except Exception:
+                pass
+
     # Reset button in right-aligned column
     c_chat_info, c_chat_reset = st.columns([5, 1])
     with c_chat_info:
@@ -1275,6 +1296,13 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
     with c_chat_reset:
         if st.button(t("btn_clear_chat", lang), key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
             st.session_state.kisan_chat_messages = []
+            if farmer:
+                try:
+                    title = f"{outcome.request.crop} Advisory"
+                    sess = create_chat_session(farmer["id"], title, field_id=field_id, scan_id=active_scan_id, language=lang)
+                    st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess["id"]
+                except Exception:
+                    pass
             st.rerun()
 
     # Pre-build ground-truth dossier and stats
@@ -1320,6 +1348,11 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
 
         if user_query:
             st.session_state.kisan_chat_messages.append({"role": "user", "content": user_query})
+            if farmer and st.session_state.get(SESSION_ACTIVE_CHAT_KEY):
+                try:
+                    save_chat_message(st.session_state[SESSION_ACTIVE_CHAT_KEY], role="user", content=user_query)
+                except Exception:
+                    pass
             with st.chat_message("user"):
                 st.markdown(user_query)
 
@@ -1333,6 +1366,16 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                     )
                 st.markdown(reply)
                 st.session_state.kisan_chat_messages.append({"role": "assistant", "content": reply})
+                if farmer and st.session_state.get(SESSION_ACTIVE_CHAT_KEY):
+                    try:
+                        save_chat_message(
+                            st.session_state[SESSION_ACTIVE_CHAT_KEY],
+                            role="assistant",
+                            content=reply,
+                            dossier_snapshot={"crop": outcome.request.crop, "stage": outcome.request.growth_stage, "mean_ndvi": stats.get("mean_ndvi")},
+                        )
+                    except Exception:
+                        pass
 
 
 st.set_page_config(
@@ -2460,6 +2503,15 @@ if analyze_live or use_saved:
                 progress.write("Recommendations: validated AI ranking or rule-based fallback complete.")
                 progress.update(label="Analysis complete", state="complete")
         st.session_state.analysis_outcome = outcome
+        if current_farmer:
+            act_field = get_active_field()
+            saved_scan = record_scan_outcome(
+                outcome,
+                farmer_id=current_farmer["id"],
+                field_id=act_field["id"] if act_field else None,
+            )
+            if saved_scan:
+                st.session_state["active_scan_id"] = saved_scan["id"]
         with suggestion_slot.container():
             show_suggestions(outcome)
             show_export_section(outcome)

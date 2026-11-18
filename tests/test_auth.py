@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import streamlit as st
 
+from analysis import AnalysisOutcome, SourceState
 from auth import (
     SESSION_ACTIVE_CHAT_KEY,
     SESSION_ACTIVE_FIELD_KEY,
@@ -17,16 +18,18 @@ from auth import (
     is_authenticated,
     login_farmer,
     logout_farmer,
+    record_scan_outcome,
     render_auth_drawer,
     render_auth_header_widget,
     render_farmer_fields_selector,
     render_save_field_widget,
+    render_scan_history_timeline,
     set_active_field,
 )
 from db.connection import init_db
 from db.farmers import create_farmer
 from db.fields import save_field
-from models import AnalysisArea
+from models import AnalysisArea, AnalysisRequest
 
 
 class TestAuthSession(unittest.TestCase):
@@ -82,7 +85,6 @@ class TestAuthSession(unittest.TestCase):
         render_auth_drawer("en", is_open=False)
 
     def test_farmer_fields_selector_empty_when_no_fields(self):
-        # When no fields exist for farmer, selector returns None
         result = render_farmer_fields_selector("non-existent-farmer-id", "en")
         self.assertIsNone(result)
 
@@ -99,7 +101,6 @@ class TestAuthSession(unittest.TestCase):
                 db_path=tmp.name,
             )
             with patch("auth.fields_ui.list_fields", return_value=[saved_f]):
-                # Test with default unselected index
                 res_none = render_farmer_fields_selector(farmer["id"], "en")
                 self.assertIsNone(res_none)
         finally:
@@ -108,6 +109,39 @@ class TestAuthSession(unittest.TestCase):
                     os.remove(tmp.name)
                 except OSError:
                     pass
+
+    def test_record_scan_outcome_persistence(self):
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        try:
+            init_db(tmp.name)
+            farmer = create_farmer("Jasbir Kaur", phone_number="9876511111", mpin="1111", db_path=tmp.name)
+            req = AnalysisRequest(
+                area=AnalysisArea(28.4, 77.1, 28.5, 77.2),
+                crop="Wheat",
+                growth_stage="Flowering",
+            )
+            outcome = AnalysisOutcome(
+                request=req,
+                weather=SourceState(None, False, None),
+                satellite=SourceState(None, False, None),
+                suggestions=(),
+                suggestion_source="Rule-based fallback",
+            )
+            saved_scan = record_scan_outcome(outcome, farmer_id=farmer["id"], db_path=tmp.name)
+            self.assertIsNotNone(saved_scan)
+            self.assertEqual(saved_scan["crop_name"], "Wheat")
+            self.assertEqual(saved_scan["growth_stage"], "Flowering")
+        finally:
+            if os.path.exists(tmp.name):
+                try:
+                    os.remove(tmp.name)
+                except OSError:
+                    pass
+
+    def test_render_scan_history_timeline_empty(self):
+        # Should render empty note without error
+        render_scan_history_timeline("non-existent-farmer", current_lang="en")
 
 
 if __name__ == "__main__":

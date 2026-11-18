@@ -8,12 +8,14 @@ from typing import Optional
 import streamlit as st
 
 from auth.session import (
+    get_active_field,
     get_current_farmer,
     is_authenticated,
     login_farmer,
     logout_farmer,
 )
 from db.farmers import authenticate_farmer, create_farmer
+from db.scans import list_scans_for_farmer, list_scans_for_field
 from i18n import SUPPORTED_LANGUAGES, t
 
 
@@ -70,13 +72,15 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
     with st.container():
         if farmer:
             # Logged-in farmer profile view
+            act_field = get_active_field()
+            field_info = f" · Active Field: {act_field.get('name')}" if act_field else ""
             st.markdown(
                 f"""
                 <div style="background: var(--ink-1); border: 1px solid var(--signal);
                             border-left: 4px solid var(--signal); padding: 14px 18px; margin-bottom: 14px;">
                     <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 700;
                                 color: var(--bone); letter-spacing: 0.1em; text-transform: uppercase;">
-                        🌾 Farmer Profile // किसान प्रोफाइल
+                        🌾 Farmer Profile // किसान प्रोफाइल {field_info}
                     </div>
                     <div style="font-size: 12px; color: var(--bone-2); margin-top: 6px; display: flex; gap: 16px; flex-wrap: wrap;">
                         <span><strong>Name:</strong> {farmer.get('full_name')}</span>
@@ -97,6 +101,10 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                         st.rerun()
                     except Exception:
                         pass
+            
+            # Show past scans timeline for logged in farmer
+            from auth.history import render_scan_history_timeline
+            render_scan_history_timeline(farmer["id"], field_id=act_field.get("id") if act_field else None, current_lang=current_lang)
             return
 
         # Guest view: Sign In or Register tabs
