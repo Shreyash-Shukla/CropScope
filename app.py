@@ -127,125 +127,195 @@ def render_search_autocomplete_script() -> None:
           const parentDoc = window.parent.document;
           if (!parentDoc) return;
 
-          function initAutocomplete() {
-            const input = parentDoc.querySelector('input[aria-label="Search location"]') ||
-                          parentDoc.querySelector('input[placeholder*="Karnal"]');
+          function getSearchInput() {
+            return parentDoc.querySelector('input[placeholder*="Karnal"]') ||
+                   parentDoc.querySelector('input[aria-label="Search location"]') ||
+                   parentDoc.querySelector('div[data-testid="stTextInput"] input');
+          }
+
+          let dropdown = parentDoc.getElementById("cs-search-autocomplete");
+          if (!dropdown) {
+            dropdown = parentDoc.createElement("div");
+            dropdown.id = "cs-search-autocomplete";
+            dropdown.style.cssText = [
+              "position: absolute",
+              "z-index: 999999",
+              "background: var(--ink-1, #0c0e11)",
+              "border: 1px solid var(--signal, #ff6a1a)",
+              "border-radius: 0px",
+              "box-shadow: 0 10px 28px rgba(0,0,0,0.35)",
+              "max-height: 280px",
+              "overflow-y: auto",
+              "display: none",
+              "font-family: var(--font-mono, monospace)",
+              "font-size: 12.5px",
+              "box-sizing: border-box"
+            ].join(";");
+            parentDoc.body.appendChild(dropdown);
+          }
+
+          let debounceTimer = null;
+          let abortController = null;
+          let activeIndex = -1;
+          let currentResults = [];
+          let isSelecting = false;
+
+          function positionDropdown(input) {
+            if (!input || dropdown.style.display === "none") return;
+            const rect = input.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+              dropdown.style.display = "none";
+              return;
+            }
+            dropdown.style.top = (rect.bottom + window.parent.scrollY + 4) + "px";
+            dropdown.style.left = (rect.left + window.parent.scrollX) + "px";
+            dropdown.style.width = rect.width + "px";
+          }
+
+          function highlightIndex(idx) {
+            activeIndex = idx;
+            const rows = dropdown.children;
+            for (let i = 0; i < rows.length; i++) {
+              rows[i].style.background = i === activeIndex ? "var(--ink-2, rgba(255, 106, 26, 0.22))" : "var(--ink-1, transparent)";
+            }
+          }
+
+          function selectItem(input, item) {
+            isSelecting = true;
+            clearTimeout(debounceTimer);
+            if (abortController) {
+              abortController.abort();
+              abortController = null;
+            }
+            dropdown.style.display = "none";
+            dropdown.innerHTML = "";
+            activeIndex = -1;
+            currentResults = [];
+
+            const queryName = [item.name, item.admin1, item.country].filter(Boolean).join(", ");
+            const nativeSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
+            if (nativeSetter) {
+              nativeSetter.call(input, queryName);
+            } else {
+              input.value = queryName;
+            }
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            input.dispatchEvent(new window.parent.KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
+
+            setTimeout(() => {
+              isSelecting = false;
+              dropdown.style.display = "none";
+              dropdown.innerHTML = "";
+            }, 600);
+          }
+
+          function renderResults(input, results) {
+            if (isSelecting) {
+              dropdown.style.display = "none";
+              dropdown.innerHTML = "";
+              return;
+            }
+            currentResults = results || [];
+            activeIndex = -1;
+            dropdown.innerHTML = "";
+            if (!currentResults || currentResults.length === 0) {
+              dropdown.style.display = "none";
+              return;
+            }
+            positionDropdown(input);
+            currentResults.forEach((item, idx) => {
+              const row = parentDoc.createElement("div");
+              row.style.cssText = [
+                "padding: 8px 12px",
+                "cursor: pointer",
+                "border-bottom: 1px solid var(--line, rgba(255,255,255,0.06))",
+                "display: flex",
+                "justify-content: space-between",
+                "align-items: center",
+                "color: var(--bone, #e6edf3)",
+                "background: var(--ink-1, transparent)",
+                "transition: background 0.12s ease"
+              ].join(";");
+              const left = parentDoc.createElement("div");
+              left.innerHTML = `<span style="font-weight: 600; color: var(--signal, #ff6a1a);">📍 ${item.name}</span> <span style="color: var(--bone-3, #8b949e); font-size: 11.5px;">${[item.admin1, item.country].filter(Boolean).join(", ")}</span>`;
+              const right = parentDoc.createElement("div");
+              right.style.cssText = "color: var(--bone-3, #7d8590); font-size: 11px; font-family: monospace; white-space: nowrap; margin-left: 8px;";
+              right.textContent = `${item.latitude ? item.latitude.toFixed(2) : ""}°, ${item.longitude ? item.longitude.toFixed(2) : ""}°`;
+              row.appendChild(left);
+              row.appendChild(right);
+
+              row.addEventListener("mouseenter", () => highlightIndex(idx));
+              row.addEventListener("mousedown", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                selectItem(input, item);
+              });
+              dropdown.appendChild(row);
+            });
+            dropdown.style.display = "block";
+          }
+
+          function attachAutocomplete() {
+            const input = getSearchInput();
             if (!input || input.dataset.hasAutocomplete === "true") return;
             input.dataset.hasAutocomplete = "true";
 
-            let dropdown = parentDoc.getElementById("cs-search-autocomplete");
-            if (!dropdown) {
-              dropdown = parentDoc.createElement("div");
-              dropdown.id = "cs-search-autocomplete";
-              dropdown.style.cssText = [
-                "position: absolute",
-                "z-index: 999999",
-                "background: var(--ink-1, #0e1117)",
-                "border: 1px solid var(--signal, rgba(255, 106, 26, 0.4))",
-                "border-radius: 0px",
-                "box-shadow: 0 10px 28px rgba(0,0,0,0.25)",
-                "max-height: 280px",
-                "overflow-y: auto",
-                "display: none",
-                "font-family: var(--font-mono, monospace)",
-                "font-size: 12.5px",
-                "box-sizing: border-box"
-              ].join(";");
-              parentDoc.body.appendChild(dropdown);
-            }
-
-            let debounceTimer = null;
-            let abortController = null;
-            let activeIndex = -1;
-            let currentResults = [];
-
-            function positionDropdown() {
-              const rect = input.getBoundingClientRect();
-              dropdown.style.top = (rect.bottom + window.parent.scrollY + 4) + "px";
-              dropdown.style.left = (rect.left + window.parent.scrollX) + "px";
-              dropdown.style.width = rect.width + "px";
-            }
-
-            function renderResults(results) {
-              currentResults = results;
-              activeIndex = -1;
-              dropdown.innerHTML = "";
-              if (!results || results.length === 0) {
+            input.addEventListener("input", function() {
+              if (isSelecting) {
+                clearTimeout(debounceTimer);
                 dropdown.style.display = "none";
+                dropdown.innerHTML = "";
                 return;
               }
-              positionDropdown();
-              results.forEach((item, idx) => {
-                const row = parentDoc.createElement("div");
-                row.style.cssText = [
-                  "padding: 8px 12px",
-                  "cursor: pointer",
-                  "border-bottom: 1px solid var(--line, rgba(255,255,255,0.06))",
-                  "display: flex",
-                  "justify-content: space-between",
-                  "align-items: center",
-                  "color: var(--bone, #e6edf3)",
-                  "background: var(--ink-1, transparent)",
-                  "transition: background 0.15s ease"
-                ].join(";");
-                const left = parentDoc.createElement("div");
-                left.innerHTML = `<span style="font-weight: 600; color: var(--signal, #ff6a1a);">📍 ${item.name}</span> <span style="color: var(--bone-3, #8b949e); font-size: 11.5px;">${[item.admin1, item.country].filter(Boolean).join(", ")}</span>`;
-                const right = parentDoc.createElement("div");
-                right.style.cssText = "color: var(--bone-3, #7d8590); font-size: 11px; font-family: monospace; white-space: nowrap; margin-left: 8px;";
-                right.textContent = `${item.latitude.toFixed(2)}°, ${item.longitude.toFixed(2)}°`;
-                row.appendChild(left);
-                row.appendChild(right);
-
-                row.addEventListener("mouseenter", () => highlightIndex(idx));
-                row.addEventListener("mousedown", (e) => {
-                  e.preventDefault();
-                  selectItem(item);
-                });
-                dropdown.appendChild(row);
-              });
-              dropdown.style.display = "block";
-            }
-
-            function highlightIndex(idx) {
-              activeIndex = idx;
-              const rows = dropdown.children;
-              for (let i = 0; i < rows.length; i++) {
-                rows[i].style.background = i === activeIndex ? "var(--ink-2, rgba(255, 106, 26, 0.22))" : "var(--ink-1, transparent)";
-              }
-            }
-
-            function selectItem(item) {
-              dropdown.style.display = "none";
-              const queryName = [item.name, item.admin1, item.country].filter(Boolean).join(", ");
-              const nativeSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
-              nativeSetter.call(input, queryName);
-              input.dispatchEvent(new Event("input", { bubbles: true }));
-              input.dispatchEvent(new Event("change", { bubbles: true }));
-              input.dispatchEvent(new window.parent.KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
-            }
-
-            input.addEventListener("input", function() {
               const q = input.value.trim();
               clearTimeout(debounceTimer);
-              if (abortController) abortController.abort();
+              if (abortController) {
+                abortController.abort();
+                abortController = null;
+              }
               if (q.length < 2) {
                 dropdown.style.display = "none";
+                dropdown.innerHTML = "";
+                currentResults = [];
+                activeIndex = -1;
                 return;
               }
               debounceTimer = setTimeout(() => {
+                if (isSelecting) return;
                 abortController = new AbortController();
                 fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=en&format=json`, { signal: abortController.signal })
                   .then(res => res.json())
                   .then(data => {
-                    renderResults(data.results || []);
+                    if (isSelecting) return;
+                    renderResults(input, data.results || []);
                   })
                   .catch(err => {
-                    if (err.name !== 'AbortError') dropdown.style.display = "none";
+                    if (err.name !== 'AbortError') {
+                      dropdown.style.display = "none";
+                    }
                   });
-              }, 200);
+              }, 180);
             });
 
             input.addEventListener("keydown", function(e) {
+              if (e.key === "Enter") {
+                clearTimeout(debounceTimer);
+                if (abortController) {
+                  abortController.abort();
+                  abortController = null;
+                }
+                if (dropdown.style.display !== "none" && activeIndex >= 0 && currentResults[activeIndex]) {
+                  e.preventDefault();
+                  selectItem(input, currentResults[activeIndex]);
+                } else {
+                  dropdown.style.display = "none";
+                  dropdown.innerHTML = "";
+                  activeIndex = -1;
+                  currentResults = [];
+                }
+                return;
+              }
               if (dropdown.style.display === "none") return;
               if (e.key === "ArrowDown") {
                 e.preventDefault();
@@ -253,27 +323,47 @@ def render_search_autocomplete_script() -> None:
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
                 highlightIndex(Math.max(activeIndex - 1, 0));
-              } else if (e.key === "Enter" && activeIndex >= 0) {
-                e.preventDefault();
-                selectItem(currentResults[activeIndex]);
               } else if (e.key === "Escape") {
                 dropdown.style.display = "none";
+                dropdown.innerHTML = "";
+                activeIndex = -1;
               }
             });
 
-            parentDoc.addEventListener("click", function(e) {
+            input.addEventListener("blur", function() {
+              setTimeout(() => {
+                if (!isSelecting) {
+                  dropdown.style.display = "none";
+                }
+              }, 150);
+            });
+
+            parentDoc.addEventListener("mousedown", function(e) {
               if (!dropdown.contains(e.target) && e.target !== input) {
+                clearTimeout(debounceTimer);
+                if (abortController) {
+                  abortController.abort();
+                  abortController = null;
+                }
                 dropdown.style.display = "none";
+                dropdown.innerHTML = "";
               }
             });
 
-            window.parent.addEventListener("resize", positionDropdown);
-            window.parent.addEventListener("scroll", positionDropdown);
+            const onReposition = () => positionDropdown(input);
+            window.parent.addEventListener("resize", onReposition);
+            window.parent.addEventListener("scroll", onReposition);
           }
 
-          initAutocomplete();
-          setTimeout(initAutocomplete, 250);
-          setTimeout(initAutocomplete, 600);
+          attachAutocomplete();
+          try {
+            const observer = new (window.parent.MutationObserver || MutationObserver)(() => {
+              attachAutocomplete();
+            });
+            observer.observe(parentDoc.body, { childList: true, subtree: true });
+          } catch(e) {}
+          const pollTimer = setInterval(attachAutocomplete, 400);
+          setTimeout(() => clearInterval(pollTimer), 10000);
         })();
         </script>
         """,
