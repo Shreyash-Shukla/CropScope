@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.py[cod]
+*$py.class
+*.db
+*.sqlite
+.env
+.env.*
+!.env.example
+cache/
+scratch/
+reference/
+presentation/
+screenshots/
+tests/

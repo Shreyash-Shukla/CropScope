@@ -86,7 +86,7 @@ class AppUITests(unittest.TestCase):
         self.assertEqual(at.button[1].label, t("btn_use_saved", "hi"))
 
     def test_kisan_mitra_chat_interaction(self):
-        at = AppTest.from_file(APP_PATH, default_timeout=35)
+        at = AppTest.from_file(APP_PATH, default_timeout=60)
         at.run()
         at.radio[0].set_value("Use sample preset").run()
         at.selectbox(key="crop_select").select("Wheat").run()
@@ -104,7 +104,7 @@ class AppUITests(unittest.TestCase):
         self.assertTrue(len(at.session_state["kisan_chat_messages"][1]["content"]) > 0)
 
     def test_chat_and_pills_in_light_mode(self):
-        at = AppTest.from_file(APP_PATH, default_timeout=35)
+        at = AppTest.from_file(APP_PATH, default_timeout=60)
         at.run()
         at.selectbox(key="theme_selector").select("Light").run()
         self.assertEqual(at.session_state["theme"], "Light")

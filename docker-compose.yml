@@ -1,0 +1,19 @@
+services:
+  cropscope:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cropscope-app
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+    volumes:
+      - cropscope-cache:/app/cache
+
+volumes:
+  cropscope-cache:
+    driver: local
