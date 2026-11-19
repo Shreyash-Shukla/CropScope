@@ -1,11 +1,23 @@
 """CropScope: selected-area weather and Sentinel-2 vegetation processing."""
 
+import os
 import re
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
 
 import folium
 import pandas as pd
 import streamlit as st
+
+# Automatically sync Streamlit Cloud Secrets (st.secrets) to os.environ for cloud deployments
+try:
+    for _k, _v in getattr(st, "secrets", {}).items():
+        if isinstance(_v, str) and _k not in os.environ:
+            os.environ[_k] = _v
+except Exception:
+    pass
 from folium.plugins import Draw, Geocoder, LocateControl
 from streamlit_folium import st_folium
 
