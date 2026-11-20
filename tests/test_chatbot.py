@@ -280,6 +280,26 @@ class ChatbotEngineTests(unittest.TestCase):
         for q in legit_queries:
             self.assertFalse(is_off_topic_query(q), f"Query wrongly flagged as off-topic: {q}")
 
+    def test_easter_egg_query_and_response(self):
+        from chatbot import is_easter_egg_query, get_easter_egg_response, chat_with_kisan_mitra
+        triggers = [
+            "jai kisan",
+            "Jai Jawan Jai Kisan",
+            "जय जवान जय किसान",
+            "easter egg",
+            "who built cropscope",
+            "who made cropscope",
+        ]
+        for trig in triggers:
+            self.assertTrue(is_easter_egg_query(trig), f"Trigger not recognized: {trig}")
+            resp = chat_with_kisan_mitra(
+                messages=[{"role": "user", "content": trig}],
+                dossier="dummy dossier",
+                stats={},
+            )
+            self.assertIn("जय जवान, जय किसान", resp)
+            self.assertIn("Easter Egg", resp)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -382,12 +382,50 @@ def get_off_topic_refusal(lang: str = "en") -> str:
     )
 
 
+EASTER_EGG_TRIGGERS = (
+    "easter egg",
+    "easteregg",
+    "jai kisan",
+    "jai jawan jai kisan",
+    "जय जवान जय किसान",
+    "जय किसान",
+    "who made cropscope",
+    "who created cropscope",
+    "who built cropscope",
+    "cropscope secret",
+)
+
+
+def is_easter_egg_query(query: str) -> bool:
+    """Check if query triggers the secret CropScope tribute easter egg."""
+    if not query or not query.strip():
+        return False
+    q = query.lower().strip()
+    return any(trig in q for trig in EASTER_EGG_TRIGGERS)
+
+
+def get_easter_egg_response(lang: str = "en") -> str:
+    """Return celebratory tribute easter egg response for Indian farmers & creators."""
+    return (
+        "🌾 **जय जवान, जय किसान! (Hail the Soldier, Hail the Farmer!)** 🚜💚\n\n"
+        "🎉 **You found the secret CropScope Easter Egg!** 🛰️✨\n\n"
+        "CropScope was engineered with deep respect for Indian farmers — combining ESA Sentinel-2 "
+        "satellite constellations, Open-Meteo precision agro-meteorology, and grounded AI to bring "
+        "space-age precision agronomy directly to the soil.\n\n"
+        "May your fields stay evergreen, your soil stay healthy, and your harvests be abundant!\n\n"
+        "— *Crafted with ❤️ for India's Annadatas (अन्नदाता)* 🇮🇳"
+    )
+
+
 def generate_fallback_response(
     query: str,
     stats: Dict[str, Any],
     lang: str = "en",
 ) -> str:
     """Generate a reliable, grounded rule-based advisory response when LLM is unavailable."""
+    if is_easter_egg_query(query):
+        return get_easter_egg_response(lang=lang)
+
     if is_off_topic_query(query):
         return get_off_topic_refusal(lang=lang)
 
@@ -566,6 +604,10 @@ def chat_with_kisan_mitra(
     latest_query = messages[-1].get("content", "").strip()
     if not latest_query:
         return ""
+
+    # Secret tribute easter egg
+    if is_easter_egg_query(latest_query):
+        return get_easter_egg_response(lang=lang)
 
     # Strict domain guardrail: refuse off-topic requests immediately
     if is_off_topic_query(latest_query):

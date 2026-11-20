@@ -36,7 +36,12 @@ import chatbot
 if not hasattr(chatbot, "chat_with_kisan_mitra"):
     import importlib
     importlib.reload(chatbot)
-from chatbot import build_farmer_dossier, chat_with_kisan_mitra, get_dossier_summary_stats
+from chatbot import (
+    build_farmer_dossier,
+    chat_with_kisan_mitra,
+    get_dossier_summary_stats,
+    is_easter_egg_query,
+)
 from globe import build_globe_html, is_location_sunlit
 import i18n
 if not hasattr(i18n, "format_crop_label"):
@@ -1359,6 +1364,11 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                 st.markdown(msg["content"])
 
         if user_query:
+            if is_easter_egg_query(user_query):
+                try:
+                    st.balloons()
+                except Exception:
+                    pass
             st.session_state.kisan_chat_messages.append({"role": "user", "content": user_query})
             if farmer and st.session_state.get(SESSION_ACTIVE_CHAT_KEY):
                 try:
