@@ -42,6 +42,7 @@ from chatbot import (
     get_dossier_summary_stats,
     is_easter_egg_query,
 )
+from easter_egg import render_orbital_recon_easter_egg
 from globe import build_globe_html, is_location_sunlit
 import i18n
 if not hasattr(i18n, "format_crop_label"):
@@ -2319,6 +2320,7 @@ def render_header(current_lang: str) -> None:
 
 current_lang = st.session_state.get("selected_language", "en")
 render_header(current_lang)
+render_orbital_recon_easter_egg()
 
 hero_col, auth_col, theme_col, lang_col = st.columns([1.8, 1.0, 0.6, 0.6])
 with auth_col:

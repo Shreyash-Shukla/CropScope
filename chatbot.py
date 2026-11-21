@@ -393,6 +393,12 @@ EASTER_EGG_TRIGGERS = (
     "who created cropscope",
     "who built cropscope",
     "cropscope secret",
+    "konami",
+    "mars",
+    "flight deck",
+    "matrix",
+    "isro",
+    "orbital",
 )
 
 
@@ -408,12 +414,14 @@ def get_easter_egg_response(lang: str = "en") -> str:
     """Return celebratory tribute easter egg response for Indian farmers & creators."""
     return (
         "🌾 **जय जवान, जय किसान! (Hail the Soldier, Hail the Farmer!)** 🚜💚\n\n"
-        "🎉 **You found the secret CropScope Easter Egg!** 🛰️✨\n\n"
+        "🎉 **You unlocked the secret CropScope Easter Egg & Orbital Channel!** 🛰️✨\n\n"
         "CropScope was engineered with deep respect for Indian farmers — combining ESA Sentinel-2 "
         "satellite constellations, Open-Meteo precision agro-meteorology, and grounded AI to bring "
         "space-age precision agronomy directly to the soil.\n\n"
-        "May your fields stay evergreen, your soil stay healthy, and your harvests be abundant!\n\n"
-        "— *Crafted with ❤️ for India's Annadatas (अन्नदाता)* 🇮🇳"
+        "🕹️ **CLASSIFIED ORBITAL FLIGHT DECK HUD:**\n"
+        "- **Tap the 🛰️ satellite icon** in the top header 3 times (or press the classic Konami Code `↑ ↑ ↓ ↓ ← → ← → B A` on your keyboard) to open the **Retro Sci-Fi Orbital Flight Deck & Radar**!\n"
+        "- From there, you can warp to the **Mars Sol 54 Potato Farm (Acidalia Planitia)** or toggle **Matrix Cyber-Rain**!\n\n"
+        "— *Crafted with ❤️ for India's Annadatas (अन्नदाता) by Shreyash Shukla & Team* 🇮🇳"
     )
 
 
