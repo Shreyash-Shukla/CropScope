@@ -221,7 +221,9 @@ def get_supabase_client() -> Optional[Client]:
     """Return Supabase client if configured, else None."""
     if not is_supabase_configured():
         return None
-    url = os.environ["SUPABASE_URL"].strip()
+    url = os.environ["SUPABASE_URL"].strip().rstrip("/")
+    if url.endswith("/rest/v1"):
+        url = url[:-len("/rest/v1")]
     key = os.environ["SUPABASE_ANON_KEY"].strip()
     try:
         return create_client(url, key)
