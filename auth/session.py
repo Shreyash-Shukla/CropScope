@@ -28,8 +28,6 @@ def login_farmer(farmer: Dict[str, Any]) -> None:
     pref_lang = farmer.get("preferred_language")
     if pref_lang:
         st.session_state["selected_language"] = pref_lang
-        # If language selectbox key is used, update it as well
-        st.session_state["language_selector"] = pref_lang
 
 
 def logout_farmer() -> None:
