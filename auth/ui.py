@@ -163,22 +163,25 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                 if not login_id or not login_secret:
                     st.error("Please enter both identifier and password/MPIN.")
                 else:
-                    is_mpin = auth_method == "4-Digit MPIN"
-                    f_record = authenticate_farmer(
-                        login_id,
-                        password=None if is_mpin else login_secret,
-                        mpin=login_secret if is_mpin else None,
-                    )
-                    if f_record:
-                        login_farmer(f_record)
-                        st.session_state["toggle_farmer_account"] = False
-                        st.success(f"Welcome back, {f_record.get('full_name', 'Farmer')}!")
-                        try:
-                            st.rerun()
-                        except Exception:
-                            pass
-                    else:
-                        st.error("Invalid credentials. Please verify your mobile/email and secret.")
+                    try:
+                        is_mpin = auth_method == "4-Digit MPIN"
+                        f_record = authenticate_farmer(
+                            login_id,
+                            password=None if is_mpin else login_secret,
+                            mpin=login_secret if is_mpin else None,
+                        )
+                        if f_record:
+                            login_farmer(f_record)
+                            st.session_state["toggle_farmer_account"] = False
+                            st.success(f"Welcome back, {f_record.get('full_name', 'Farmer')}!")
+                            try:
+                                st.rerun()
+                            except Exception:
+                                pass
+                        else:
+                            st.error("Invalid credentials. Please verify your mobile/email and secret.")
+                    except Exception as le:
+                        st.error(f"Sign-in error: {le}")
 
         with tab_register:
             r_name = st.text_input("Full Name / पूरा नाम *", placeholder="e.g. Ramesh Kumar", key="reg_name")
@@ -234,3 +237,5 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                             pass
                     except ValueError as ve:
                         st.error(str(ve))
+                    except Exception as exc:
+                        st.error(f"Account creation error: {exc}")

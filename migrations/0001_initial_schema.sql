@@ -178,3 +178,26 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at ASC);
+
+-- ============================================================
+-- 10. ROW LEVEL SECURITY (RLS) & PUBLIC API PERMISSIONS
+-- Disable RLS on application tables so CropScope client can read/write directly
+-- ============================================================
+ALTER TABLE IF EXISTS farmers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS fields DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS crop_cycles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS analysis_scans DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS weather_telemetry DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS satellite_telemetry DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS advisory_recommendations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS chat_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS chat_messages DISABLE ROW LEVEL SECURITY;
+
+-- Grant full read/write permissions to anon, authenticated, and service_role
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;

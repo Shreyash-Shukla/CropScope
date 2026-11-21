@@ -103,9 +103,17 @@ def create_farmer(
                 "created_at": now_iso,
                 "updated_at": now_iso,
             }
-            res = sb.table("farmers").insert(payload).execute()
-            if res.data:
-                return _clean_farmer_dict(res.data[0])
+            try:
+                res = sb.table("farmers").insert(payload).execute()
+                if res.data:
+                    return _clean_farmer_dict(res.data[0])
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "unique" in err_msg or "duplicate" in err_msg or "already exists" in err_msg:
+                    raise ValueError("A farmer with this email or phone number already exists.") from e
+                raise RuntimeError(
+                    f"Supabase error: {e}. Check that RLS is disabled and tables are created."
+                ) from e
 
     # Local SQLite engine
     conn = get_sqlite_conn(db_path)
