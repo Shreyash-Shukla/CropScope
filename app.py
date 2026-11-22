@@ -90,7 +90,7 @@ from auth import (
     render_save_field_widget,
     set_active_field,
 )
-from db.chat import create_chat_session, get_chat_history, save_chat_message
+from db.chat import create_chat_session, get_chat_history, list_chat_sessions, save_chat_message
 
 
 def add_map_layers(map_obj: folium.Map) -> None:
@@ -836,14 +836,14 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         "Restricted: Heat": "[RESTRICTED: HEAT]",
     }
 
-    hdr_col, unit_col = st.columns([3, 1])
+    hdr_col, unit_col = st.columns([3, 1], vertical_alignment="center")
     with hdr_col:
         st.markdown(
             f"""
             <div style="font-family: var(--font-mono); font-size: 10px; color: var(--bone-3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">
               {t("sec_weather_kicker", lang)}
             </div>
-            <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.1; margin-bottom: 8px;">
+            <div style="font-family: var(--font-sans); font-size: 24px; font-weight: 500; color: var(--bone); line-height: 1.25; margin-bottom: 8px;">
               {t("sec_weather_title", lang)}
             </div>
             """,
@@ -1288,34 +1288,69 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
     field_id = active_field["id"] if active_field else None
     active_scan_id = st.session_state.get("active_scan_id")
 
-    # If farmer is logged in and no active chat session exists yet, initialize or load it
+    # If farmer is logged in, manage active thread or load past conversations
     if farmer:
-        if SESSION_ACTIVE_CHAT_KEY not in st.session_state or not st.session_state[SESSION_ACTIVE_CHAT_KEY]:
-            title = f"{outcome.request.crop} Advisory"
-            try:
-                sess = create_chat_session(farmer["id"], title, field_id=field_id, scan_id=active_scan_id, language=lang)
-                st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess["id"]
-                history = get_chat_history(sess["id"])
-                if history and not st.session_state.kisan_chat_messages:
-                    st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
-            except Exception:
-                pass
+        past_sessions = list_chat_sessions(farmer["id"], limit=10)
+        session_options = ["+ Start New Advisory Thread"] + [
+            f"💬 {s.get('title', 'Advisory')} ({s.get('updated_at', '')[:16].replace('T', ' ')})"
+            for s in past_sessions
+        ]
 
-    # Reset button in right-aligned column
-    c_chat_info, c_chat_reset = st.columns([5, 1])
-    with c_chat_info:
-        st.caption(f"Language: **{SUPPORTED_LANGUAGES.get(lang, {}).get('label', 'English')}** · Grounded on live Sentinel-2 & Open-Meteo dossier")
-    with c_chat_reset:
-        if st.button(t("btn_clear_chat", lang), key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
-            st.session_state.kisan_chat_messages = []
-            if farmer:
+        cur_idx = 0
+        active_id = st.session_state.get(SESSION_ACTIVE_CHAT_KEY)
+        if active_id:
+            for idx, s in enumerate(past_sessions):
+                if s["id"] == active_id:
+                    cur_idx = idx + 1
+                    break
+
+        c_thread, c_reset = st.columns([4, 1.2], vertical_alignment="center")
+        with c_thread:
+            selected_thread = st.selectbox(
+                "💬 Conversation Threads / पिछली बातचीत",
+                options=session_options,
+                index=cur_idx,
+                key="kisan_thread_selector",
+                help="Switch between previous Kisan Mitra advisory discussions or start a fresh thread.",
+            )
+        with c_reset:
+            st.write("&nbsp;")
+            if st.button(t("btn_clear_chat", lang), key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
+                st.session_state.kisan_chat_messages = []
                 try:
                     title = f"{outcome.request.crop} Advisory"
                     sess = create_chat_session(farmer["id"], title, field_id=field_id, scan_id=active_scan_id, language=lang)
                     st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess["id"]
                 except Exception:
                     pass
-            st.rerun()
+                st.rerun()
+
+        # Handle thread switching
+        if selected_thread == session_options[0]:
+            if active_id is None:
+                try:
+                    title = f"{outcome.request.crop} Advisory"
+                    sess = create_chat_session(farmer["id"], title, field_id=field_id, scan_id=active_scan_id, language=lang)
+                    st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess["id"]
+                    st.session_state.kisan_chat_messages = []
+                except Exception:
+                    pass
+        else:
+            chosen_s = past_sessions[session_options.index(selected_thread) - 1]
+            if chosen_s["id"] != active_id:
+                st.session_state[SESSION_ACTIVE_CHAT_KEY] = chosen_s["id"]
+                history = get_chat_history(chosen_s["id"])
+                st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
+                st.rerun()
+    else:
+        # Guest mode reset button in right-aligned column
+        c_chat_info, c_chat_reset = st.columns([5, 1])
+        with c_chat_info:
+            st.caption(f"Language: **{SUPPORTED_LANGUAGES.get(lang, {}).get('label', 'English')}** · Grounded on live Sentinel-2 & Open-Meteo dossier")
+        with c_chat_reset:
+            if st.button(t("btn_clear_chat", lang), key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
+                st.session_state.kisan_chat_messages = []
+                st.rerun()
 
     # Pre-build ground-truth dossier and stats
     dossier = build_farmer_dossier(outcome, lang=lang)
@@ -1712,6 +1747,9 @@ st.markdown(
         border: 1px solid var(--line-strong) !important;
         color: var(--bone) !important;
         border-radius: 0px !important;
+        margin-top: 14px !important;
+        margin-bottom: 14px !important;
+        clear: both !important;
       }
       div[data-testid="stAlert"] p, div[data-testid="stAlert"] span, div[data-testid="stAlert"] div {
         color: var(--bone) !important;
