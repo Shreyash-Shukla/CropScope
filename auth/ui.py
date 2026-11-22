@@ -84,6 +84,7 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                     <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 700;
                                 color: var(--bone); letter-spacing: 0.1em; text-transform: uppercase;">
                         🌾 Farmer Profile // किसान प्रोफाइल {field_info}
+                        <span style="font-size: 10px; color: var(--signal); float: right; opacity: 0.85;">AUTH v2.3-READY</span>
                     </div>
                     <div style="font-size: 12px; color: var(--bone-2); margin-top: 6px; display: flex; gap: 16px; flex-wrap: wrap;">
                         <span><strong>Name:</strong> {farmer.get('full_name')}</span>
@@ -99,6 +100,10 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                 logout_farmer()
                 st.session_state["toggle_farmer_account"] = False
                 st.session_state["_close_auth_drawer"] = True
+                try:
+                    st.toast("Logged out successfully. Goodbye! 👋")
+                except Exception:
+                    pass
 
             col_logout, col_spacer = st.columns([1, 3])
             with col_logout:
@@ -123,6 +128,7 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                 <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 700;
                             color: var(--bone); letter-spacing: 0.1em; text-transform: uppercase;">
                     🌾 Farmer Account Access // किसान खाता लॉगिन
+                    <span style="font-size: 10px; color: var(--signal); float: right; opacity: 0.85;">AUTH v2.3-READY</span>
                 </div>
                 <div style="font-size: 11.5px; color: var(--bone-2); margin-top: 4px;">
                     Sign in to save your farm boundaries, past satellite & weather scans, and chat history.
@@ -181,6 +187,10 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                         if f_record:
                             login_farmer(f_record)
                             st.session_state["_close_auth_drawer"] = True
+                            try:
+                                st.toast(f"Welcome back, {f_record.get('full_name', 'Farmer')}! 🌾")
+                            except Exception:
+                                pass
                             st.success(f"Welcome back, {f_record.get('full_name', 'Farmer')}!")
                             try:
                                 st.rerun()
@@ -238,6 +248,10 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                         )
                         login_farmer(new_farmer)
                         st.session_state["_close_auth_drawer"] = True
+                        try:
+                            st.toast(f"Account created! Welcome to CropScope, {r_name}! 🌾")
+                        except Exception:
+                            pass
                         st.success(f"Account created! Welcome to CropScope, {r_name}!")
                         try:
                             st.rerun()
