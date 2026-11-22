@@ -17,6 +17,14 @@ from auth.session import (
 from db.farmers import authenticate_farmer, create_farmer
 from db.scans import list_scans_for_farmer, list_scans_for_field
 from auth.locations import INDIAN_STATES_DISTRICTS, get_all_states, get_districts_for_state
+from auth.validation import (
+    normalize_and_validate_phone,
+    validate_email,
+    validate_full_name,
+    validate_login_identifier,
+    validate_mpin,
+    validate_password,
+)
 from i18n import SUPPORTED_LANGUAGES, t
 
 
@@ -175,32 +183,57 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                     )
 
             if st.button("Sign In / प्रवेश करें", key="btn_submit_login", type="primary", use_container_width=True):
-                if not login_id or not login_secret:
-                    st.error("Please enter both identifier and password/MPIN.")
+                is_mpin = auth_method == "4-Digit MPIN"
+                id_ok, norm_id, id_err = validate_login_identifier(login_id)
+                if not id_ok:
+                    st.error(id_err)
+                elif is_mpin:
+                    mpin_ok, mpin_err = validate_mpin(login_secret)
+                    if not login_secret.strip():
+                        st.error("Please enter your 4-digit MPIN / कृपया अपना 4-अंकों का एमपिन दर्ज करें।")
+                    elif not mpin_ok:
+                        st.error(mpin_err)
+                    else:
+                        try:
+                            f_record = authenticate_farmer(norm_id, mpin=login_secret.strip())
+                            if f_record:
+                                login_farmer(f_record)
+                                st.session_state["_close_auth_drawer"] = True
+                                try:
+                                    st.toast(f"Welcome back, {f_record.get('full_name', 'Farmer')}! 🌾")
+                                except Exception:
+                                    pass
+                                st.success(f"Welcome back, {f_record.get('full_name', 'Farmer')}!")
+                                try:
+                                    st.rerun()
+                                except Exception:
+                                    pass
+                            else:
+                                st.error("Invalid credentials. Please verify your mobile/email and MPIN.")
+                        except Exception as le:
+                            st.error(f"Sign-in error: {le}")
                 else:
-                    try:
-                        is_mpin = auth_method == "4-Digit MPIN"
-                        f_record = authenticate_farmer(
-                            login_id,
-                            password=None if is_mpin else login_secret,
-                            mpin=login_secret if is_mpin else None,
-                        )
-                        if f_record:
-                            login_farmer(f_record)
-                            st.session_state["_close_auth_drawer"] = True
-                            try:
-                                st.toast(f"Welcome back, {f_record.get('full_name', 'Farmer')}! 🌾")
-                            except Exception:
-                                pass
-                            st.success(f"Welcome back, {f_record.get('full_name', 'Farmer')}!")
-                            try:
-                                st.rerun()
-                            except Exception:
-                                pass
-                        else:
-                            st.error("Invalid credentials. Please verify your mobile/email and secret.")
-                    except Exception as le:
-                        st.error(f"Sign-in error: {le}")
+                    if not login_secret:
+                        st.error("Please enter your password / कृपया अपना पासवर्ड दर्ज करें।")
+                    else:
+                        try:
+                            f_record = authenticate_farmer(norm_id, password=login_secret)
+                            if f_record:
+                                login_farmer(f_record)
+                                st.session_state["_close_auth_drawer"] = True
+                                try:
+                                    st.toast(f"Welcome back, {f_record.get('full_name', 'Farmer')}! 🌾")
+                                except Exception:
+                                    pass
+                                st.success(f"Welcome back, {f_record.get('full_name', 'Farmer')}!")
+                                try:
+                                    st.rerun()
+                                except Exception:
+                                    pass
+                            else:
+                                st.error("Invalid credentials. Please verify your mobile/email and password.")
+                        except Exception as le:
+                            st.error(f"Sign-in error: {le}")
 
         with tab_register:
             r_name = st.text_input("Full Name / पूरा नाम *", placeholder="e.g. Ramesh Kumar", key="reg_name")
@@ -212,7 +245,7 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
 
             r_sec1, r_sec2 = st.columns(2)
             with r_sec1:
-                r_pw = st.text_input("Password (Optional)", type="password", key="reg_pw")
+                r_pw = st.text_input("Password (Optional, min 6 chars)", type="password", key="reg_pw")
             with r_sec2:
                 r_mpin = st.text_input("4-Digit MPIN / एमपिन", type="password", max_chars=4, placeholder="••••", key="reg_mpin")
 
@@ -248,18 +281,32 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                     r_dist = st.text_input("District / ज़िला", placeholder="e.g. Ludhiana, Karnal", key="reg_dist").strip()
 
             if st.button("Create Account & Sign In / खाता बनाएं", key="btn_submit_reg", type="primary", use_container_width=True):
-                if not r_name.strip():
-                    st.error("Please enter your name.")
-                elif not r_phone.strip() and not r_email.strip():
-                    st.error("Please provide at least a mobile number or email.")
+                name_ok, name_err = validate_full_name(r_name)
+                phone_ok, norm_phone, phone_err = normalize_and_validate_phone(r_phone)
+                email_ok, clean_email, email_err = validate_email(r_email)
+                pw_ok, pw_err = validate_password(r_pw)
+                mpin_ok, mpin_err = validate_mpin(r_mpin)
+
+                if not name_ok:
+                    st.error(name_err)
+                elif r_phone.strip() and not phone_ok:
+                    st.error(phone_err)
+                elif r_email.strip() and not email_ok:
+                    st.error(email_err)
+                elif not norm_phone and not clean_email:
+                    st.error("Please provide at least a valid 10-digit mobile number or email address / कृपया कम से कम एक मान्य मोबाइल नंबर या ईमेल प्रदान करें।")
+                elif r_pw and not pw_ok:
+                    st.error(pw_err)
+                elif r_mpin and not mpin_ok:
+                    st.error(mpin_err)
                 elif not r_pw and not r_mpin:
-                    st.error("Please set either a password or a 4-digit MPIN for sign-in.")
+                    st.error("Please set either a password (min 6 characters) or a 4-digit MPIN for sign-in / कृपया पासवर्ड या 4-अंकों का एमपिन सेट करें।")
                 else:
                     try:
                         new_farmer = create_farmer(
                             full_name=r_name,
-                            phone_number=r_phone or None,
-                            email=r_email or None,
+                            phone_number=norm_phone,
+                            email=clean_email,
                             password=r_pw or None,
                             mpin=r_mpin or None,
                             preferred_language=chosen_lang,
@@ -280,4 +327,5 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                     except ValueError as ve:
                         st.error(str(ve))
                     except Exception as exc:
+                        st.error(f"Account creation error: {exc}")
                         st.error(f"Account creation error: {exc}")

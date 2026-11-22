@@ -17,6 +17,13 @@ from db.connection import (
     get_supabase_client,
     is_supabase_configured,
 )
+from auth.validation import (
+    normalize_and_validate_phone,
+    validate_email,
+    validate_full_name,
+    validate_mpin,
+    validate_password,
+)
 
 
 def hash_secret(secret: str) -> str:
@@ -55,19 +62,8 @@ def _clean_farmer_dict(row_dict: Dict[str, Any]) -> Dict[str, Any]:
 
 def normalize_phone_number(phone: Optional[str]) -> Optional[str]:
     """Normalize phone number to standard digits, stripping leading country codes or zero."""
-    if not phone:
-        return None
-    raw = phone.strip()
-    digits = re.sub(r"[^\d]", "", raw)
-    if not digits:
-        return None
-    # If 12 digits starting with 91 (e.g. +91 9876543210), strip 91
-    if len(digits) == 12 and digits.startswith("91"):
-        digits = digits[2:]
-    # If 11 digits starting with 0 (e.g. 09876543210), strip leading 0
-    elif len(digits) == 11 and digits.startswith("0"):
-        digits = digits[1:]
-    return digits
+    _, norm, _ = normalize_and_validate_phone(phone)
+    return norm
 
 
 def create_farmer(
@@ -87,17 +83,33 @@ def create_farmer(
     Raises:
         ValueError: If neither email nor phone provided, or if already registered.
     """
-    clean_email = email.strip().lower() if email and email.strip() else None
-    clean_phone = normalize_phone_number(phone_number)
+    name_ok, name_err = validate_full_name(full_name)
+    if not name_ok:
+        raise ValueError(name_err)
+
+    phone_ok, clean_phone, phone_err = normalize_and_validate_phone(phone_number)
+    if phone_number and not phone_ok:
+        raise ValueError(phone_err)
+
+    email_ok, clean_email, email_err = validate_email(email)
+    if email and not email_ok:
+        raise ValueError(email_err)
 
     if not clean_email and not clean_phone:
         raise ValueError("At least one contact identifier (email or phone number) is required.")
 
+    if password:
+        pw_ok, pw_err = validate_password(password)
+        if not pw_ok:
+            raise ValueError(pw_err)
+
+    if mpin:
+        mpin_ok, mpin_err = validate_mpin(mpin)
+        if not mpin_ok:
+            raise ValueError(mpin_err)
+
     if not password and not mpin:
         raise ValueError("Either a password or MPIN must be set for authentication.")
-
-    if mpin and (len(mpin.strip()) != 4 or not mpin.strip().isdigit()):
-        raise ValueError("4-Digit MPIN must contain exactly 4 numeric digits.")
 
     farmer_id = str(uuid.uuid4())
     pw_hash = hash_secret(password) if password else None

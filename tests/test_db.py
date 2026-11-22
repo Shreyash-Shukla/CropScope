@@ -79,7 +79,7 @@ class TestDatabaseLayer(unittest.TestCase):
             create_farmer(
                 full_name="Duplicate",
                 email="ramesh@example.com",
-                password="any",
+                password="password123",
                 db_path=self.db_path,
             )
 
