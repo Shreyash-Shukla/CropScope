@@ -3,6 +3,7 @@
 import json
 import math
 import re
+from functools import lru_cache
 from typing import Optional
 
 from models import AnalysisArea
@@ -307,7 +308,8 @@ def get_ip_location(ip: Optional[str] = None, timeout: float = 3.0) -> tuple[flo
         raise LocationError(f"Could not automatically detect location: {exc}") from exc
 
 
-def search_locations(query: str, count: int = 5, timeout: float = 4.0) -> list[dict]:
+@lru_cache(maxsize=128)
+def search_locations(query: str, count: int = 5, timeout: float = 6.0) -> list[dict]:
     """Search global locations by name using Open-Meteo Geocoding API.
 
     Returns a list of dictionaries with keys:

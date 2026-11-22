@@ -1260,7 +1260,6 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
 
 
-@st.fragment
 def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
     lang = st.session_state.get("selected_language", "en")
 
@@ -1290,7 +1289,10 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
 
     # If farmer is logged in, manage active thread or load past conversations
     if farmer:
-        past_sessions = list_chat_sessions(farmer["id"], limit=10)
+        try:
+            past_sessions = list_chat_sessions(farmer["id"], limit=10)
+        except Exception:
+            past_sessions = []
         session_options = ["+ Start New Advisory Thread"] + [
             f"💬 {s.get('title', 'Advisory')} ({s.get('updated_at', '')[:16].replace('T', ' ')})"
             for s in past_sessions
@@ -1339,8 +1341,11 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
             chosen_s = past_sessions[session_options.index(selected_thread) - 1]
             if chosen_s["id"] != active_id:
                 st.session_state[SESSION_ACTIVE_CHAT_KEY] = chosen_s["id"]
-                history = get_chat_history(chosen_s["id"])
-                st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
+                try:
+                    history = get_chat_history(chosen_s["id"])
+                    st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
+                except Exception:
+                    st.session_state.kisan_chat_messages = []
                 st.rerun()
     else:
         # Guest mode reset button in right-aligned column
@@ -1352,9 +1357,13 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                 st.session_state.kisan_chat_messages = []
                 st.rerun()
 
-    # Pre-build ground-truth dossier and stats
-    dossier = build_farmer_dossier(outcome, lang=lang)
-    stats = get_dossier_summary_stats(outcome)
+    # Pre-build ground-truth dossier and stats with safety fallback
+    try:
+        dossier = build_farmer_dossier(outcome, lang=lang)
+        stats = get_dossier_summary_stats(outcome)
+    except Exception:
+        dossier = f"Field Dossier for {outcome.request.crop} ({outcome.request.growth_stage})"
+        stats = {"mean_ndvi": None, "water_balance_status": "Available"}
 
     # Render quick prompt suggestion pills
     quick_prompts = get_quick_prompts(lang)

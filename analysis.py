@@ -72,7 +72,7 @@ def analyze(
     try:
         suggestions = ai_ranker(request, evidence, candidates)
         source = "Gemini-ranked, evidence-checked"
-    except AIError:
+    except Exception:
         suggestions = rule_based_suggestions(evidence, candidates)
         source = "Rule-based fallback (Gemini unavailable or response rejected)"
     return AnalysisOutcome(request, weather, satellite, suggestions, source)
