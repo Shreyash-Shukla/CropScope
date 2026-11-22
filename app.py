@@ -390,13 +390,20 @@ def render_search_autocomplete_script() -> None:
 
           attachAutocomplete();
           try {
+            if (window.parent.__cropscope_autocomplete_observer) {
+              window.parent.__cropscope_autocomplete_observer.disconnect();
+            }
             const observer = new (window.parent.MutationObserver || MutationObserver)(() => {
               attachAutocomplete();
             });
+            window.parent.__cropscope_autocomplete_observer = observer;
             observer.observe(parentDoc.body, { childList: true, subtree: true });
           } catch(e) {}
-          const pollTimer = setInterval(attachAutocomplete, 400);
-          setTimeout(() => clearInterval(pollTimer), 10000);
+          if (!window.parent.__cropscope_autocomplete_poll) {
+            window.parent.__cropscope_autocomplete_poll = true;
+            const pollTimer = setInterval(attachAutocomplete, 400);
+            setTimeout(() => clearInterval(pollTimer), 10000);
+          }
         })();
         </script>
         """,
@@ -413,8 +420,12 @@ def render_copy_tooltip_suppression_script() -> None:
           try {
             const doc = window.parent.document;
             if (!doc) return;
+            if (window.parent.__cropscope_copy_tooltip_initialized) return;
+            window.parent.__cropscope_copy_tooltip_initialized = true;
 
+            let scheduled = false;
             function suppressCopyTooltips() {
+              scheduled = false;
               const codeBtns = doc.querySelectorAll('div[data-testid="stCode"] button, div[data-testid="stCode"] [data-testid="stBaseButton-elementToolbar"], .stCopyButton');
               codeBtns.forEach(btn => {
                 btn.removeAttribute('title');
@@ -440,7 +451,10 @@ def render_copy_tooltip_suppression_script() -> None:
 
             suppressCopyTooltips();
             const observer = new MutationObserver(() => {
-              suppressCopyTooltips();
+              if (!scheduled) {
+                scheduled = true;
+                window.parent.requestAnimationFrame(suppressCopyTooltips);
+              }
             });
             observer.observe(doc.body, { childList: true, subtree: true });
           } catch(e) {}
@@ -789,6 +803,7 @@ def my_location_area() -> tuple[AnalysisArea | None, str | None]:
     return area, None
 
 
+@st.fragment
 def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> None:
     lat, lon = area.center
     is_day, elev = is_location_sunlit(lat, lon)
@@ -1260,6 +1275,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         )
 
 
+@st.fragment
 def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
     lang = st.session_state.get("selected_language", "en")
 
@@ -1336,7 +1352,10 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                 st.session_state.kisan_chat_messages = []
                 st.session_state[SESSION_ACTIVE_CHAT_KEY] = None
                 st.session_state["_loaded_chat_session_id"] = None
-                st.rerun()
+                try:
+                    st.rerun(scope="fragment")
+                except Exception:
+                    st.rerun()
 
         # Handle thread switching
         if selected_thread == session_options[0]:
@@ -1344,7 +1363,10 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                 st.session_state[SESSION_ACTIVE_CHAT_KEY] = None
                 st.session_state["_loaded_chat_session_id"] = None
                 st.session_state.kisan_chat_messages = []
-                st.rerun()
+                try:
+                    st.rerun(scope="fragment")
+                except Exception:
+                    st.rerun()
         else:
             chosen_s = past_sessions[session_options.index(selected_thread) - 1]
             if chosen_s["id"] != active_id:
@@ -1355,7 +1377,10 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                     st.session_state["_loaded_chat_session_id"] = chosen_s["id"]
                 except Exception:
                     st.session_state.kisan_chat_messages = []
-                st.rerun()
+                try:
+                    st.rerun(scope="fragment")
+                except Exception:
+                    st.rerun()
     else:
         # Ensure any leftover farmer chat references are purged in guest mode
         st.session_state.pop(SESSION_ACTIVE_CHAT_KEY, None)
@@ -1367,7 +1392,10 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
         with c_chat_reset:
             if st.button(t("btn_clear_chat", lang), key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
                 st.session_state.kisan_chat_messages = []
-                st.rerun()
+                try:
+                    st.rerun(scope="fragment")
+                except Exception:
+                    st.rerun()
 
     # Pre-build ground-truth dossier and stats with safety fallback
     try:
@@ -1461,6 +1489,27 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                     except Exception:
                         pass
 
+    # Ensure internal viewport auto-scrolls down to reveal latest message smoothly
+    st.components.v1.html(
+        """
+        <script>
+        (function() {
+          try {
+            const doc = window.parent.document;
+            if (!doc) return;
+            const boxes = doc.querySelectorAll('div[data-testid="stVerticalBlockBorderWrapper"]');
+            boxes.forEach(b => {
+              if (b.querySelector('div[data-testid="stChatMessage"]')) {
+                b.scrollTop = b.scrollHeight;
+              }
+            });
+          } catch(e) {}
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
 
 st.set_page_config(
     page_title="CropScope · Watched",
@@ -1525,13 +1574,18 @@ st.markdown(
       }
 
       /* ── Watched.earth Hard Rules (DESIGN §1) ── */
-      /* Global Smooth Scrolling & Momentum */
       html, body, .stApp {
         background-color: var(--ink-0) !important;
         color: var(--bone) !important;
         font-family: var(--font-sans) !important;
-        scroll-behavior: smooth !important;
         -webkit-overflow-scrolling: touch !important;
+      }
+
+      /* Prevent split-second UI fading/dimming on reruns */
+      [data-stale="true"],
+      .stApp [data-stale="true"] {
+        opacity: 1 !important;
+        transition: none !important;
       }
 
       /* Global Watched.earth Custom Scrollbars */
@@ -1616,7 +1670,7 @@ st.markdown(
         border: 1px solid var(--line-strong) !important;
         padding: 10px 18px !important;
         box-shadow: none !important;
-        transition: all 120ms ease !important;
+        transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease !important;
       }
       button[kind="secondary"]:hover, .stButton > button:hover {
         background-color: var(--ink-2) !important;
@@ -1966,6 +2020,7 @@ st.markdown(
       div[data-testid="stVerticalBlockBorderWrapper"]:has(.cs-chat-placeholder) {
         scroll-behavior: smooth !important;
         -webkit-overflow-scrolling: touch !important;
+        overflow-anchor: auto !important;
         border: 1px solid var(--line) !important;
         background-color: var(--ink-0) !important;
         padding: 12px 14px !important;
@@ -2046,7 +2101,7 @@ st.markdown(
         border-radius: 0px !important;
         font-family: var(--font-mono) !important;
         font-size: 11px !important;
-        transition: all 120ms ease !important;
+        transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease !important;
       }
       div[data-testid="stButtonGroup"] button *,
       div.stButtonGroup button *,

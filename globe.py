@@ -1643,6 +1643,7 @@ _GLOBE_TEMPLATE = """<!DOCTYPE html>
 """
 
 
+@functools.lru_cache(maxsize=16)
 def build_globe_html(
     center_lat: float,
     center_lon: float,
