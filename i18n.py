@@ -58,16 +58,16 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
 
     # Hero & Console Banner
     "hero_kicker": {
-        "en": "01 / ORBITAL SENSING CONSOLE · SGP4 CELESTRAK",
-        "hi": "01 / अंतरिक्ष उपग्रह निगरानी केंद्र · SGP4 CELESTRAK",
-        "pa": "01 / ਪੁਲਾੜ ਸੈਟੇਲਾਈਟ ਨਿਗਰਾਨੀ ਕੇਂਦਰ · SGP4 CELESTRAK",
-        "mr": "01 / अंतराळ उपग्रह देखरेख केंद्र · SGP4 CELESTRAK",
-        "te": "01 / అంతరిక్ష ఉపగ్రహ పర్యవేక్షణ కేంద్రం · SGP4 CELESTRAK",
-        "ta": "01 / விண்வெளி செயற்கைக்கோள் கண்காணிப்பு மையம் · SGP4 CELESTRAK",
-        "gu": "01 / અંતરિક્ષ ઉપગ્રહ મોનિટરિંગ કન્સોલ · SGP4 CELESTRAK",
-        "bn": "01 / মহাকাশ উপগ্রহ পর্যবেক্ষণ কেন্দ্র · SGP4 CELESTRAK",
-        "kn": "01 / ಬಾಹ್ಯಾಕಾಶ ಉಪಗ್ರಹ ವೀಕ್ಷಣಾ ಕೇಂದ್ರ · SGP4 CELESTRAK",
-        "ml": "01 / ഉപഗ്രഹ നിരീക്ഷണ കേന്ദ്രം · SGP4 CELESTRAK",
+        "en": "ORBITAL SENSING CONSOLE · SGP4 CELESTRAK",
+        "hi": "अंतरिक्ष उपग्रह निगरानी केंद्र · SGP4 CELESTRAK",
+        "pa": "ਪੁਲਾੜ ਸੈਟੇਲਾਈਟ ਨਿਗਰਾਨੀ ਕੇਂਦਰ · SGP4 CELESTRAK",
+        "mr": "अंतराळ उपग्रह देखरेख केंद्र · SGP4 CELESTRAK",
+        "te": "అంతరిక్ష ఉపగ్రహ పర్యవేక్షణ కేంద్రం · SGP4 CELESTRAK",
+        "ta": "விண்வெளி செயற்கைக்கோள் கண்காணிப்பு மையம் · SGP4 CELESTRAK",
+        "gu": "અંતરિક્ષ ઉપગ્રહ મોનિટરિંગ કન્સોલ · SGP4 CELESTRAK",
+        "bn": "মহাকাশ উপগ্রহ পর্যবেক্ষণ কেন্দ্র · SGP4 CELESTRAK",
+        "kn": "ಬಾಹ್ಯಾಕಾಶ ಉಪಗ್ರಹ ವೀಕ್ಷಣಾ ಕೇಂದ್ರ · SGP4 CELESTRAK",
+        "ml": "ഉപഗ്രഹ നിരീക്ഷണ കേന്ദ്രം · SGP4 CELESTRAK",
     },
     "hero_title_prefix": {
         "en": "Something watched ",
