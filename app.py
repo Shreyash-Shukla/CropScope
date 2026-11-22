@@ -2063,8 +2063,8 @@ st.markdown(
         font-family: var(--font-sans);
         font-size: 15px;
         color: var(--bone-2);
-        max-width: 640px;
-        line-height: 1.45;
+        max-width: 100%;
+        line-height: 1.5;
         margin: 0;
       }
 
