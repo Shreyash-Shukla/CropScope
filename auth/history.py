@@ -115,27 +115,46 @@ def render_scan_history_timeline(
     field_id: Optional[str] = None,
     current_lang: str = "en",
 ) -> None:
-    """Render historical scans timeline for the farmer or active field."""
-    if field_id:
-        scans = list_scans_for_field(field_id, limit=10)
-    else:
-        scans = list_scans_for_farmer(farmer_id, limit=10)
-
-    if not scans:
+    """Render historical scans timeline for the farmer."""
+    all_farmer_scans = list_scans_for_farmer(farmer_id, limit=20)
+    if not all_farmer_scans:
         st.info("No past scans recorded yet. Run an analysis above to save your first scan.")
         return
 
-    st.markdown(
-        """
-        <div style="font-family: var(--font-mono); font-size: 11px; color: var(--bone-3);
-                    text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 8px;">
-            📜 Past Scan Records // पिछले स्कैन
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # If field_id is set, see if there are scans for this field
+    field_scans = [s for s in all_farmer_scans if s.get("field_id") == field_id] if field_id else []
 
-    for scan in scans:
+    scans_to_display = all_farmer_scans
+    if field_id and field_scans:
+        col_f1, col_f2 = st.columns([2, 1], vertical_alignment="center")
+        with col_f1:
+            st.markdown(
+                f"""
+                <div style="font-family: var(--font-mono); font-size: 11px; color: var(--bone-3);
+                            text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 8px;">
+                    📜 Past Scan Records // पिछले स्कैन ({len(field_scans)} active · {len(all_farmer_scans)} total)
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with col_f2:
+            show_all = st.checkbox("Show all parcels", value=False, key="chk_show_all_scans")
+            if not show_all:
+                scans_to_display = field_scans
+    else:
+        st.markdown(
+            f"""
+            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--bone-3);
+                        text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 8px;">
+                📜 Past Scan Records // पिछले स्कैन ({len(all_farmer_scans)} total)
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if field_id and not field_scans:
+            st.caption("ℹ️ Showing all farm scans (no scans recorded specifically for this active parcel yet).")
+
+    for scan in scans_to_display:
         scan_date = scan.get("scanned_at", "")[:16].replace("T", " ")
         crop = scan.get("crop_name", "Crop")
         stage = scan.get("growth_stage", "Stage")
@@ -146,7 +165,7 @@ def render_scan_history_timeline(
         st.markdown(
             f"""
             <div style="background: var(--ink-1); border: 1px solid var(--line);
-                        padding: 10px 14px; margin-bottom: 8px; border-left: 3px solid var(--signal);">
+                        padding: 10px 14px; margin-bottom: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <div>
                         <strong style="color: var(--bone); font-family: var(--font-mono);">{crop}</strong>

@@ -28,6 +28,9 @@ def login_farmer(farmer: Dict[str, Any]) -> None:
     pref_lang = farmer.get("preferred_language")
     if pref_lang:
         st.session_state["selected_language"] = pref_lang
+    st.session_state.pop(SESSION_ACTIVE_CHAT_KEY, None)
+    st.session_state.pop("_loaded_chat_session_id", None)
+    st.session_state.pop("kisan_chat_messages", None)
 
 
 def logout_farmer() -> None:
@@ -35,6 +38,9 @@ def logout_farmer() -> None:
     st.session_state.pop(SESSION_FARMER_KEY, None)
     st.session_state.pop(SESSION_ACTIVE_FIELD_KEY, None)
     st.session_state.pop(SESSION_ACTIVE_CHAT_KEY, None)
+    st.session_state.pop("_loaded_chat_session_id", None)
+    st.session_state.pop("kisan_chat_messages", None)
+    st.session_state.pop("active_scan_id", None)
 
 
 def get_active_field() -> Optional[Dict[str, Any]]:

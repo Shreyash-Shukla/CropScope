@@ -88,6 +88,7 @@ def list_chat_sessions(
     farmer_id: str,
     limit: int = 20,
     include_archived: bool = False,
+    only_with_messages: bool = False,
     db_path: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """List recent chat conversations for a farmer."""
@@ -102,7 +103,20 @@ def list_chat_sessions(
 
     conn = get_sqlite_conn(db_path)
     cur = conn.cursor()
-    if include_archived:
+    if only_with_messages:
+        arch_filter = "" if include_archived else "AND cs.is_archived = 0"
+        cur.execute(
+            f"""
+            SELECT cs.*, COUNT(cm.id) AS message_count
+            FROM chat_sessions cs
+            INNER JOIN chat_messages cm ON cs.id = cm.session_id
+            WHERE cs.farmer_id = ? {arch_filter}
+            GROUP BY cs.id
+            ORDER BY cs.updated_at DESC LIMIT ?
+            """,
+            (farmer_id, limit),
+        )
+    elif include_archived:
         cur.execute(
             """
             SELECT * FROM chat_sessions

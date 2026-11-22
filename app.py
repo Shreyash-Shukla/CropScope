@@ -1290,7 +1290,7 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
     # If farmer is logged in, manage active thread or load past conversations
     if farmer:
         try:
-            past_sessions = list_chat_sessions(farmer["id"], limit=10)
+            past_sessions = list_chat_sessions(farmer["id"], limit=15, only_with_messages=True)
         except Exception:
             past_sessions = []
         session_options = ["+ Start New Advisory Thread"] + [
@@ -1298,13 +1298,22 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
             for s in past_sessions
         ]
 
-        cur_idx = 0
         active_id = st.session_state.get(SESSION_ACTIVE_CHAT_KEY)
+        cur_idx = 0
         if active_id:
             for idx, s in enumerate(past_sessions):
                 if s["id"] == active_id:
                     cur_idx = idx + 1
                     break
+
+        # Hydrate messages from DB if an active thread is selected but not currently loaded
+        if active_id and st.session_state.get("_loaded_chat_session_id") != active_id:
+            try:
+                history = get_chat_history(active_id)
+                st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
+                st.session_state["_loaded_chat_session_id"] = active_id
+            except Exception:
+                pass
 
         c_thread, c_reset = st.columns([4, 1.2], vertical_alignment="center")
         with c_thread:
@@ -1319,24 +1328,17 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
             st.write("&nbsp;")
             if st.button(t("btn_clear_chat", lang), key="kisan_reset_chat", help="Start a new chat conversation with Kisan Mitra"):
                 st.session_state.kisan_chat_messages = []
-                try:
-                    title = f"{outcome.request.crop} Advisory"
-                    sess = create_chat_session(farmer["id"], title, field_id=field_id, scan_id=active_scan_id, language=lang)
-                    st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess["id"]
-                except Exception:
-                    pass
+                st.session_state[SESSION_ACTIVE_CHAT_KEY] = None
+                st.session_state["_loaded_chat_session_id"] = None
                 st.rerun()
 
         # Handle thread switching
         if selected_thread == session_options[0]:
-            if active_id is None:
-                try:
-                    title = f"{outcome.request.crop} Advisory"
-                    sess = create_chat_session(farmer["id"], title, field_id=field_id, scan_id=active_scan_id, language=lang)
-                    st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess["id"]
-                    st.session_state.kisan_chat_messages = []
-                except Exception:
-                    pass
+            if active_id is not None:
+                st.session_state[SESSION_ACTIVE_CHAT_KEY] = None
+                st.session_state["_loaded_chat_session_id"] = None
+                st.session_state.kisan_chat_messages = []
+                st.rerun()
         else:
             chosen_s = past_sessions[session_options.index(selected_thread) - 1]
             if chosen_s["id"] != active_id:
@@ -1344,6 +1346,7 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                 try:
                     history = get_chat_history(chosen_s["id"])
                     st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
+                    st.session_state["_loaded_chat_session_id"] = chosen_s["id"]
                 except Exception:
                     st.session_state.kisan_chat_messages = []
                 st.rerun()
@@ -1409,11 +1412,21 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                 except Exception:
                     pass
             st.session_state.kisan_chat_messages.append({"role": "user", "content": user_query})
-            if farmer and st.session_state.get(SESSION_ACTIVE_CHAT_KEY):
-                try:
-                    save_chat_message(st.session_state[SESSION_ACTIVE_CHAT_KEY], role="user", content=user_query)
-                except Exception:
-                    pass
+            if farmer:
+                if not st.session_state.get(SESSION_ACTIVE_CHAT_KEY):
+                    try:
+                        title = f"{outcome.request.crop} Advisory"
+                        sess = create_chat_session(farmer["id"], title, field_id=field_id, scan_id=active_scan_id, language=lang)
+                        st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess["id"]
+                        st.session_state["_loaded_chat_session_id"] = sess["id"]
+                    except Exception:
+                        pass
+                active_chat_id = st.session_state.get(SESSION_ACTIVE_CHAT_KEY)
+                if active_chat_id:
+                    try:
+                        save_chat_message(active_chat_id, role="user", content=user_query)
+                    except Exception:
+                        pass
             with st.chat_message("user"):
                 st.markdown(user_query)
 
@@ -1427,10 +1440,11 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                     )
                 st.markdown(reply)
                 st.session_state.kisan_chat_messages.append({"role": "assistant", "content": reply})
-                if farmer and st.session_state.get(SESSION_ACTIVE_CHAT_KEY):
+                active_chat_id = st.session_state.get(SESSION_ACTIVE_CHAT_KEY)
+                if farmer and active_chat_id:
                     try:
                         save_chat_message(
-                            st.session_state[SESSION_ACTIVE_CHAT_KEY],
+                            active_chat_id,
                             role="assistant",
                             content=reply,
                             dossier_snapshot={"crop": outcome.request.crop, "stage": outcome.request.growth_stage, "mean_ndvi": stats.get("mean_ndvi")},

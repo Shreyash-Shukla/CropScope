@@ -273,10 +273,23 @@ class TestDatabaseLayer(unittest.TestCase):
         sessions = list_chat_sessions(farmer["id"], db_path=self.db_path)
         self.assertEqual(len(sessions), 1)
 
+        # Create an empty ghost session and verify only_with_messages filters it out
+        empty_session = create_chat_session(
+            farmer_id=farmer["id"],
+            title="Empty Session",
+            language="en",
+            db_path=self.db_path,
+        )
+        all_sessions = list_chat_sessions(farmer["id"], db_path=self.db_path, only_with_messages=False)
+        self.assertEqual(len(all_sessions), 2)
+        non_empty_sessions = list_chat_sessions(farmer["id"], db_path=self.db_path, only_with_messages=True)
+        self.assertEqual(len(non_empty_sessions), 1)
+        self.assertEqual(non_empty_sessions[0]["id"], session["id"])
+
         # Archive session
         archive_chat_session(session["id"], db_path=self.db_path)
         active_sessions = list_chat_sessions(farmer["id"], include_archived=False, db_path=self.db_path)
-        self.assertEqual(len(active_sessions), 0)
+        self.assertEqual(len(active_sessions), 1)  # only empty_session remains active
 
 
 if __name__ == "__main__":
