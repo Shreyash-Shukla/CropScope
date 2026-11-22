@@ -150,6 +150,18 @@ class AppUITests(unittest.TestCase):
         self.assertIn('div[data-testid="stCode"] [data-testid="stTooltipHoverTarget"]', combined_css)
         self.assertIn('div[data-testid="stCode"] [data-testid="stTooltipContent"]', combined_css)
 
+    def test_auth_drawer_toggle_cycle(self):
+        at = AppTest.from_file(APP_PATH, default_timeout=15)
+        at.run()
+        self.assertFalse(at.exception)
+        # Flip toggle on to open drawer
+        at.toggle(key="toggle_farmer_account").set_value(True).run()
+        self.assertFalse(at.exception)
+        self.assertIsNotNone(at.button(key="btn_submit_login"))
+        # Flip toggle off to close drawer
+        at.toggle(key="toggle_farmer_account").set_value(False).run()
+        self.assertFalse(at.exception)
+
 
 if __name__ == "__main__":
     unittest.main()

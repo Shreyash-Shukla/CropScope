@@ -24,6 +24,9 @@ def render_auth_header_widget(current_lang: str) -> bool:
     
     Returns True if the account drawer should be opened.
     """
+    if st.session_state.pop("_close_auth_drawer", False):
+        st.session_state["toggle_farmer_account"] = False
+
     farmer = get_current_farmer()
 
     if farmer:
@@ -92,11 +95,16 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                 """,
                 unsafe_allow_html=True,
             )
+            def _on_logout() -> None:
+                logout_farmer()
+                st.session_state["toggle_farmer_account"] = False
+                st.session_state["_close_auth_drawer"] = True
+
             col_logout, col_spacer = st.columns([1, 3])
             with col_logout:
-                if st.button("🚪 Logout / लॉग आउट", key="btn_logout_action", use_container_width=True):
+                if st.button("🚪 Logout / लॉग आउट", key="btn_logout_action", on_click=_on_logout, use_container_width=True):
                     logout_farmer()
-                    st.session_state["toggle_farmer_account"] = False
+                    st.session_state["_close_auth_drawer"] = True
                     try:
                         st.rerun()
                     except Exception:
@@ -172,7 +180,7 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                         )
                         if f_record:
                             login_farmer(f_record)
-                            st.session_state["toggle_farmer_account"] = False
+                            st.session_state["_close_auth_drawer"] = True
                             st.success(f"Welcome back, {f_record.get('full_name', 'Farmer')}!")
                             try:
                                 st.rerun()
@@ -229,7 +237,7 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                             district=r_dist or None,
                         )
                         login_farmer(new_farmer)
-                        st.session_state["toggle_farmer_account"] = False
+                        st.session_state["_close_auth_drawer"] = True
                         st.success(f"Account created! Welcome to CropScope, {r_name}!")
                         try:
                             st.rerun()

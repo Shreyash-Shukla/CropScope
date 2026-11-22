@@ -42,6 +42,7 @@ class TestAuthSession(unittest.TestCase):
             "selected_language",
             "language_selector",
             "toggle_farmer_account",
+            "_close_auth_drawer",
             "show_auth_panel",
             "farmer_field_selector",
         ]:
@@ -142,6 +143,25 @@ class TestAuthSession(unittest.TestCase):
     def test_render_scan_history_timeline_empty(self):
         # Should render empty note without error
         render_scan_history_timeline("non-existent-farmer", current_lang="en")
+
+    def test_auth_header_widget_resets_drawer_when_flagged(self):
+        st.session_state["toggle_farmer_account"] = True
+        st.session_state["_close_auth_drawer"] = True
+        result = render_auth_header_widget("en")
+        self.assertNotIn("_close_auth_drawer", st.session_state)
+        self.assertFalse(st.session_state.get("toggle_farmer_account"))
+
+    def test_render_auth_drawer_open_logged_in_no_widget_conflict(self):
+        farmer_data = {
+            "id": "mock-uuid-test",
+            "full_name": "Ramesh Kumar",
+            "phone_number": "7698335369",
+            "preferred_language": "en",
+        }
+        login_farmer(farmer_data)
+        st.session_state["toggle_farmer_account"] = True
+        # Calling render_auth_drawer with is_open=True should render cleanly
+        render_auth_drawer("en", is_open=True)
 
 
 if __name__ == "__main__":
