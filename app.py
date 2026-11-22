@@ -2591,12 +2591,16 @@ else:
     elif "location_mode" in st.session_state and st.session_state["location_mode"] in mode_options:
         default_mode_idx = mode_options.index(st.session_state["location_mode"])
 
+    if "location_mode" not in st.session_state or st.session_state["location_mode"] not in mode_options:
+        st.session_state["location_mode"] = mode_options[default_mode_idx]
+
     mode = st.radio(
         t("choose_area_mode", current_lang),
         mode_options,
-        index=default_mode_idx,
+        index=mode_options.index(st.session_state["location_mode"]),
         format_func=lambda m: format_mode_label(m, current_lang),
         horizontal=True,
+        key="location_mode_radio",
     )
     if st.session_state.get("location_mode") != mode:
         st.session_state.location_mode = mode

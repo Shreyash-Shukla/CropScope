@@ -107,9 +107,18 @@ class TestDatabaseLayer(unittest.TestCase):
         auth_mpin = authenticate_farmer("9876543210", mpin="1234", db_path=self.db_path)
         self.assertIsNotNone(auth_mpin)
 
+        # Authenticate via phone with +91 country prefix
+        auth_prefix = authenticate_farmer("+919876543210", mpin="1234", db_path=self.db_path)
+        self.assertIsNotNone(auth_prefix)
+        self.assertEqual(auth_prefix["id"], farmer["id"])
+
         # Failed auth
         self.assertIsNone(authenticate_farmer("ramesh@example.com", password="wrong", db_path=self.db_path))
         self.assertIsNone(authenticate_farmer("9876543210", mpin="9999", db_path=self.db_path))
+
+        # Invalid MPIN format check
+        with self.assertRaises(ValueError):
+            create_farmer(full_name="Bad MPIN", phone_number="9999999999", mpin="12", db_path=self.db_path)
 
         # Update profile
         updated = update_farmer_profile(

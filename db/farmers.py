@@ -53,6 +53,23 @@ def _clean_farmer_dict(row_dict: Dict[str, Any]) -> Dict[str, Any]:
     return res
 
 
+def normalize_phone_number(phone: Optional[str]) -> Optional[str]:
+    """Normalize phone number to standard digits, stripping leading country codes or zero."""
+    if not phone:
+        return None
+    raw = phone.strip()
+    digits = re.sub(r"[^\d]", "", raw)
+    if not digits:
+        return None
+    # If 12 digits starting with 91 (e.g. +91 9876543210), strip 91
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    # If 11 digits starting with 0 (e.g. 09876543210), strip leading 0
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    return digits
+
+
 def create_farmer(
     full_name: str,
     email: Optional[str] = None,
@@ -71,13 +88,16 @@ def create_farmer(
         ValueError: If neither email nor phone provided, or if already registered.
     """
     clean_email = email.strip().lower() if email and email.strip() else None
-    clean_phone = re.sub(r"[^\d+]", "", phone_number.strip()) if phone_number and phone_number.strip() else None
+    clean_phone = normalize_phone_number(phone_number)
 
     if not clean_email and not clean_phone:
         raise ValueError("At least one contact identifier (email or phone number) is required.")
 
     if not password and not mpin:
         raise ValueError("Either a password or MPIN must be set for authentication.")
+
+    if mpin and (len(mpin.strip()) != 4 or not mpin.strip().isdigit()):
+        raise ValueError("4-Digit MPIN must contain exactly 4 numeric digits.")
 
     farmer_id = str(uuid.uuid4())
     pw_hash = hash_secret(password) if password else None
@@ -180,7 +200,7 @@ def get_farmer_by_identifier(identifier: str, db_path: Optional[str] = None) -> 
 
     is_email = "@" in clean_id
     clean_email = clean_id.lower() if is_email else None
-    clean_phone = re.sub(r"[^\d+]", "", clean_id) if not is_email else None
+    clean_phone = normalize_phone_number(clean_id) if not is_email else None
 
     if is_supabase_configured() and not db_path:
         sb = get_supabase_client()
@@ -190,6 +210,8 @@ def get_farmer_by_identifier(identifier: str, db_path: Optional[str] = None) -> 
                 res = query.eq("email", clean_email).execute()
             else:
                 res = query.eq("phone_number", clean_phone).execute()
+                if not res.data:
+                    res = query.eq("phone_number", clean_id).execute()
             if res.data:
                 return dict(res.data[0])
             return None
@@ -199,7 +221,10 @@ def get_farmer_by_identifier(identifier: str, db_path: Optional[str] = None) -> 
     if is_email:
         cur.execute("SELECT * FROM farmers WHERE email = ?", (clean_email,))
     else:
-        cur.execute("SELECT * FROM farmers WHERE phone_number = ?", (clean_phone,))
+        cur.execute(
+            "SELECT * FROM farmers WHERE phone_number = ? OR phone_number = ? OR phone_number = ?",
+            (clean_phone, clean_id, f"+91{clean_phone}" if clean_phone else clean_id),
+        )
     row = cur.fetchone()
     if not row:
         return None
