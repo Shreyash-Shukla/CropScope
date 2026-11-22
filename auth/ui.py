@@ -79,8 +79,8 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
             field_info = f" · Active Field: {act_field.get('name')}" if act_field else ""
             st.markdown(
                 f"""
-                <div style="background: var(--ink-1); border: 1px solid var(--signal);
-                            border-left: 4px solid var(--signal); padding: 14px 18px; margin-bottom: 14px;">
+                <div style="background: var(--ink-1); border: 1px solid var(--line);
+                            padding: 14px 18px; margin-bottom: 14px;">
                     <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 700;
                                 color: var(--bone); letter-spacing: 0.1em; text-transform: uppercase;">
                         🌾 Farmer Profile // किसान प्रोफाइल {field_info}
@@ -123,8 +123,8 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
         # Guest view: Sign In or Register tabs
         st.markdown(
             """
-            <div style="background: var(--ink-1); border: 1px solid var(--signal);
-                        border-left: 4px solid var(--signal); padding: 14px 18px; margin-bottom: 14px;">
+            <div style="background: var(--ink-1); border: 1px solid var(--line);
+                        padding: 14px 18px; margin-bottom: 14px;">
                 <div style="font-family: var(--font-mono); font-size: 13px; font-weight: 700;
                             color: var(--bone); letter-spacing: 0.1em; text-transform: uppercase;">
                     🌾 Farmer Account Access // किसान खाता लॉगिन

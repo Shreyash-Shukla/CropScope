@@ -1590,7 +1590,10 @@ st.markdown(
       .stMainBlockContainer {
         padding-top: 0.25rem !important;
         padding-bottom: 3.5rem !important;
-        max-width: 1400px !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        max-width: 100% !important;
+        width: 100% !important;
       }
 
       /* Typography */
@@ -2165,7 +2168,6 @@ st.markdown(
         margin-bottom: 16px !important;
         background-color: var(--ink-1) !important;
         border: 1px solid var(--line) !important;
-        border-left: 4px solid var(--signal) !important;
       }
       .app-header-brand-wrap {
         display: flex;
