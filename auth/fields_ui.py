@@ -19,16 +19,25 @@ def render_farmer_fields_selector(farmer_id: str, current_lang: str) -> Optional
     """
     fields = list_fields(farmer_id)
     if not fields:
+        set_active_field(None)
         return None
 
     field_options = ["-- Choose from My Fields (मेरे सहेजे गए खेत) --"] + [
         f"🌾 {f['name']} ({f['area_ha']:.1f} ha · {f['area_acres']:.1f} ac)" for f in fields
     ]
 
+    act_field = get_active_field()
+    sel_idx = 0
+    if act_field:
+        for idx, f in enumerate(fields):
+            if f["id"] == act_field.get("id"):
+                sel_idx = idx + 1
+                break
+
     selected_option = st.selectbox(
         "📍 My Farm Parcels / मेरे खेत",
         options=field_options,
-        index=0,
+        index=sel_idx,
         key="farmer_field_selector",
         help="Quickly load your previously saved farm parcels and boundaries.",
     )
@@ -43,6 +52,9 @@ def render_farmer_fields_selector(farmer_id: str, current_lang: str) -> Optional
             north=chosen_field["bbox_north"],
             east=chosen_field["bbox_east"],
         )
+    else:
+        if act_field is not None:
+            set_active_field(None)
 
     return None
 

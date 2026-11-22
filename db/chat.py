@@ -187,11 +187,19 @@ def save_chat_message(
     }
 
 
-def get_chat_history(session_id: str, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_chat_history(
+    session_id: str,
+    farmer_id: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Retrieve full conversation messages ordered chronologically."""
     if is_supabase_configured() and not db_path:
         sb = get_supabase_client()
         if sb:
+            if farmer_id:
+                s_check = sb.table("chat_sessions").select("id").eq("id", session_id).eq("farmer_id", farmer_id).execute()
+                if not s_check.data:
+                    return []
             res = (
                 sb.table("chat_messages")
                 .select("*")
@@ -203,6 +211,10 @@ def get_chat_history(session_id: str, db_path: Optional[str] = None) -> List[Dic
 
     conn = get_sqlite_conn(db_path)
     cur = conn.cursor()
+    if farmer_id:
+        cur.execute("SELECT id FROM chat_sessions WHERE id = ? AND farmer_id = ?", (session_id, farmer_id))
+        if not cur.fetchone():
+            return []
     cur.execute(
         "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC",
         (session_id,),

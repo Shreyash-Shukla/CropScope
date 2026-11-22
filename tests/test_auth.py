@@ -180,6 +180,56 @@ class TestAuthSession(unittest.TestCase):
 
         self.assertEqual(get_districts_for_state("NonExistentState"), [])
 
+    def test_user_session_isolation_and_cross_user_protection(self):
+        from db.chat import create_chat_session, get_chat_history, save_chat_message
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        try:
+            init_db(tmp.name)
+            # Create two farmers
+            farmer_a = create_farmer("Farmer A", phone_number="9111111111", mpin="1111", db_path=tmp.name)
+            farmer_b = create_farmer("Farmer B", phone_number="9222222222", mpin="2222", db_path=tmp.name)
+
+            # Farmer A creates a chat session and message
+            sess_a = create_chat_session(farmer_a["id"], "A's Private Chat", db_path=tmp.name)
+            save_chat_message(sess_a["id"], role="user", content="Secret crop message A", db_path=tmp.name)
+
+            # Farmer A logs in
+            login_farmer(farmer_a)
+            st.session_state["analysis_outcome"] = "mock_outcome_A"
+            st.session_state["active_scan_id"] = "scan_A"
+            st.session_state[SESSION_ACTIVE_CHAT_KEY] = sess_a["id"]
+            st.session_state["kisan_chat_messages"] = [{"role": "user", "content": "Secret crop message A"}]
+
+            # Farmer A logs out
+            logout_farmer()
+            self.assertIsNone(get_current_farmer())
+            self.assertNotIn("analysis_outcome", st.session_state)
+            self.assertNotIn("active_scan_id", st.session_state)
+            self.assertNotIn(SESSION_ACTIVE_CHAT_KEY, st.session_state)
+            self.assertNotIn("kisan_chat_messages", st.session_state)
+
+            # Farmer B logs in
+            login_farmer(farmer_b)
+            self.assertEqual(get_current_farmer()["id"], farmer_b["id"])
+            self.assertNotIn("analysis_outcome", st.session_state)
+            self.assertNotIn("kisan_chat_messages", st.session_state)
+
+            # Farmer B attempts to read Farmer A's chat history
+            b_view = get_chat_history(sess_a["id"], farmer_id=farmer_b["id"], db_path=tmp.name)
+            self.assertEqual(b_view, [])  # Access denied / isolated
+
+            # Farmer A reading their own chat history succeeds
+            a_view = get_chat_history(sess_a["id"], farmer_id=farmer_a["id"], db_path=tmp.name)
+            self.assertEqual(len(a_view), 1)
+            self.assertEqual(a_view[0]["content"], "Secret crop message A")
+        finally:
+            try:
+                if os.path.exists(tmp.name):
+                    os.remove(tmp.name)
+            except Exception:
+                pass
+
 
 if __name__ == "__main__":
     unittest.main()

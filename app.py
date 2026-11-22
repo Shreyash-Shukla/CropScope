@@ -1305,11 +1305,17 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                 if s["id"] == active_id:
                     cur_idx = idx + 1
                     break
+            else:
+                # active_id does not belong to this farmer! Purge it immediately.
+                active_id = None
+                st.session_state[SESSION_ACTIVE_CHAT_KEY] = None
+                st.session_state["_loaded_chat_session_id"] = None
+                st.session_state.kisan_chat_messages = []
 
         # Hydrate messages from DB if an active thread is selected but not currently loaded
         if active_id and st.session_state.get("_loaded_chat_session_id") != active_id:
             try:
-                history = get_chat_history(active_id)
+                history = get_chat_history(active_id, farmer_id=farmer["id"])
                 st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
                 st.session_state["_loaded_chat_session_id"] = active_id
             except Exception:
@@ -1344,13 +1350,16 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
             if chosen_s["id"] != active_id:
                 st.session_state[SESSION_ACTIVE_CHAT_KEY] = chosen_s["id"]
                 try:
-                    history = get_chat_history(chosen_s["id"])
+                    history = get_chat_history(chosen_s["id"], farmer_id=farmer["id"])
                     st.session_state.kisan_chat_messages = [{"role": m["role"], "content": m["content"]} for m in history]
                     st.session_state["_loaded_chat_session_id"] = chosen_s["id"]
                 except Exception:
                     st.session_state.kisan_chat_messages = []
                 st.rerun()
     else:
+        # Ensure any leftover farmer chat references are purged in guest mode
+        st.session_state.pop(SESSION_ACTIVE_CHAT_KEY, None)
+        st.session_state.pop("_loaded_chat_session_id", None)
         # Guest mode reset button in right-aligned column
         c_chat_info, c_chat_reset = st.columns([5, 1])
         with c_chat_info:
