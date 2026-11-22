@@ -16,6 +16,7 @@ from auth.session import (
 )
 from db.farmers import authenticate_farmer, create_farmer
 from db.scans import list_scans_for_farmer, list_scans_for_field
+from auth.locations import INDIAN_STATES_DISTRICTS, get_all_states, get_districts_for_state
 from i18n import SUPPORTED_LANGUAGES, t
 
 
@@ -223,9 +224,28 @@ def render_auth_drawer(current_lang: str, is_open: bool) -> None:
                 chosen_lang_label = st.selectbox("Preferred Language", lang_labels, index=pref_lang_idx, key="reg_lang")
                 chosen_lang = lang_codes[lang_labels.index(chosen_lang_label)]
             with r_loc2:
-                r_state = st.text_input("State / राज्य", placeholder="e.g. Punjab, Haryana", key="reg_state")
+                state_options = ["Select State / राज्य...", *get_all_states(), "Other / अन्य"]
+                chosen_state_sel = st.selectbox("State / राज्य", state_options, index=0, key="reg_state_select")
+                if chosen_state_sel == "Other / अन्य":
+                    r_state = st.text_input("State Name", placeholder="e.g. Punjab, Haryana", key="reg_custom_state").strip()
+                elif chosen_state_sel != "Select State / राज्य...":
+                    r_state = chosen_state_sel
+                else:
+                    r_state = ""
+
             with r_loc3:
-                r_dist = st.text_input("District / ज़िला", placeholder="e.g. Ludhiana, Karnal", key="reg_dist")
+                if chosen_state_sel in INDIAN_STATES_DISTRICTS:
+                    suggested_districts = get_districts_for_state(chosen_state_sel)
+                    district_options = ["Select District / ज़िला...", *suggested_districts, "Other / अन्य"]
+                    chosen_dist_sel = st.selectbox("District / ज़िला", district_options, index=0, key="reg_dist_select")
+                    if chosen_dist_sel == "Other / अन्य":
+                        r_dist = st.text_input("District Name", placeholder="e.g. Ludhiana, Karnal", key="reg_custom_dist").strip()
+                    elif chosen_dist_sel != "Select District / ज़िला...":
+                        r_dist = chosen_dist_sel
+                    else:
+                        r_dist = ""
+                else:
+                    r_dist = st.text_input("District / ज़िला", placeholder="e.g. Ludhiana, Karnal", key="reg_dist").strip()
 
             if st.button("Create Account & Sign In / खाता बनाएं", key="btn_submit_reg", type="primary", use_container_width=True):
                 if not r_name.strip():

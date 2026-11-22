@@ -163,6 +163,23 @@ class TestAuthSession(unittest.TestCase):
         # Calling render_auth_drawer with is_open=True should render cleanly
         render_auth_drawer("en", is_open=True)
 
+    def test_state_and_district_suggestions(self):
+        from auth.locations import get_all_states, get_districts_for_state
+        states = get_all_states()
+        self.assertIn("Punjab", states)
+        self.assertIn("Haryana", states)
+        self.assertIn("Uttar Pradesh", states)
+        
+        punjab_districts = get_districts_for_state("Punjab")
+        self.assertIn("Ludhiana", punjab_districts)
+        self.assertIn("Amritsar", punjab_districts)
+
+        haryana_districts = get_districts_for_state("Haryana")
+        self.assertIn("Karnal", haryana_districts)
+        self.assertIn("Kurukshetra", haryana_districts)
+
+        self.assertEqual(get_districts_for_state("NonExistentState"), [])
+
 
 if __name__ == "__main__":
     unittest.main()
