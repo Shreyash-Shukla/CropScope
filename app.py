@@ -2209,6 +2209,125 @@ st.markdown(
       .app-footer-disclaimer strong {
         color: var(--bone-2);
       }
+
+      /* ── Comprehensive Mobile Responsiveness (§Watched.earth Mobile UX) ── */
+      @media (max-width: 900px) {
+        .main .block-container,
+        [data-testid="stMainBlockContainer"],
+        .stMainBlockContainer {
+          padding-left: 1rem !important;
+          padding-right: 1rem !important;
+          padding-top: 0.2rem !important;
+        }
+        .hero-title {
+          font-size: clamp(28px, 6vw, 42px) !important;
+        }
+      }
+
+      @media (max-width: 768px) {
+        /* Container padding */
+        .main .block-container,
+        [data-testid="stMainBlockContainer"],
+        .stMainBlockContainer {
+          padding-left: 0.65rem !important;
+          padding-right: 0.65rem !important;
+          padding-top: 0.15rem !important;
+          padding-bottom: 2rem !important;
+        }
+
+        /* Responsive Header Bar: stack brand & controls cleanly */
+        div[data-testid="stVerticalBlock"]:has(#cropscope-header-anchor) [data-testid="stHorizontalBlock"] {
+          flex-direction: column !important;
+          gap: 10px !important;
+        }
+        div[data-testid="stVerticalBlock"]:has(#cropscope-header-anchor) [data-testid="stColumn"] {
+          width: 100% !important;
+          min-width: 100% !important;
+          flex: 1 1 100% !important;
+        }
+        .app-header-brand-wrap {
+          flex-direction: column !important;
+          align-items: flex-start !important;
+          gap: 6px !important;
+        }
+
+        /* Hero Typography */
+        .hero-container {
+          padding: 16px 0 12px 0 !important;
+          margin-bottom: 16px !important;
+        }
+        .hero-title {
+          font-size: clamp(24px, 7vw, 34px) !important;
+          line-height: 1.1 !important;
+          margin-bottom: 8px !important;
+        }
+        .hero-sub {
+          font-size: 13.5px !important;
+          line-height: 1.5 !important;
+        }
+
+        /* Radio Mode Selector: fluid chip wrapping */
+        div[data-testid="stRadio"] > div[role="radiogroup"] {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          gap: 8px !important;
+        }
+        div[data-testid="stRadio"] label {
+          font-size: 10.5px !important;
+          padding: 6px 10px !important;
+          background: var(--ink-1) !important;
+          border: 1px solid var(--line) !important;
+        }
+
+        /* Analyze Action Buttons: stack full width */
+        div[data-testid="stHorizontalBlock"]:has(button[kind="primary"]) {
+          flex-direction: column !important;
+          gap: 8px !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(button[kind="primary"]) [data-testid="stColumn"] {
+          width: 100% !important;
+          min-width: 100% !important;
+        }
+
+        /* Metrics / KPIs */
+        div[data-testid="stMetric"] {
+          padding: 10px 12px !important;
+        }
+        div[data-testid="stMetricValue"] div {
+          font-size: 16px !important;
+        }
+
+        /* Responsive Footer */
+        .app-footer-grid {
+          grid-template-columns: 1fr !important;
+          gap: 16px !important;
+        }
+        .app-footer-bottom {
+          flex-direction: column !important;
+          align-items: flex-start !important;
+          gap: 10px !important;
+        }
+
+        /* Maps & Iframes fluid bounding */
+        iframe {
+          max-width: 100% !important;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .main .block-container,
+        [data-testid="stMainBlockContainer"],
+        .stMainBlockContainer {
+          padding-left: 0.35rem !important;
+          padding-right: 0.35rem !important;
+        }
+        .hero-title {
+          font-size: 22px !important;
+        }
+        .hero-sub {
+          font-size: 12.5px !important;
+        }
+      }
     </style>
     """,
     unsafe_allow_html=True,
