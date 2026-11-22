@@ -3,6 +3,7 @@
 import json
 import math
 import re
+from typing import Optional
 
 from models import AnalysisArea
 
@@ -275,7 +276,7 @@ def parse_boundary_string(bound_str: str) -> tuple[float, float, float, float]:
     return north, south, west, east
 
 
-def get_ip_location(timeout: float = 3.0) -> tuple[float, float, str]:
+def get_ip_location(ip: Optional[str] = None, timeout: float = 3.0) -> tuple[float, float, str]:
     """Detect approximate location from public IP geolocation.
 
     Returns (latitude, longitude, display_name).
@@ -284,8 +285,9 @@ def get_ip_location(timeout: float = 3.0) -> tuple[float, float, str]:
     from urllib.error import HTTPError, URLError
     from urllib.request import Request, urlopen
 
+    endpoint = f"http://ip-api.com/json/{ip}" if ip else "http://ip-api.com/json/"
     req = Request(
-        "http://ip-api.com/json/",
+        endpoint,
         headers={"User-Agent": "CropScope/1.0 (Agricultural Remote Sensing)"},
     )
     try:

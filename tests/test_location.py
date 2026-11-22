@@ -193,6 +193,28 @@ class RectangleSelectionTests(unittest.TestCase):
         self.assertIn("New Delhi", label)
 
     @patch("urllib.request.urlopen")
+    def test_get_ip_location_with_client_ip(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "status": "success",
+            "lat": 30.9010,
+            "lon": 75.8573,
+            "city": "Ludhiana",
+            "regionName": "Punjab",
+            "country": "India"
+        }).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        lat, lon, label = get_ip_location(ip="103.21.244.2")
+        self.assertAlmostEqual(lat, 30.9010)
+        self.assertAlmostEqual(lon, 75.8573)
+        self.assertIn("Ludhiana", label)
+        # Check that the request was made to the IP-specific URL
+        call_args = mock_urlopen.call_args[0][0]
+        self.assertIn("103.21.244.2", call_args.full_url)
+
+    @patch("urllib.request.urlopen")
     def test_get_ip_location_failure(self, mock_urlopen):
         from urllib.error import URLError
         mock_urlopen.side_effect = URLError("Network unreachable")

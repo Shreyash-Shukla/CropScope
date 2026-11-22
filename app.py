@@ -706,11 +706,30 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
 def my_location_area() -> tuple[AnalysisArea | None, str | None]:
     st.write("Automatically detect your current field location using device GPS or network geolocation.")
 
+    def _get_client_ip_from_request() -> Optional[str]:
+        try:
+            if hasattr(st, "context") and hasattr(st.context, "headers"):
+                h = st.context.headers
+                for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip"]:
+                    val = h.get(key)
+                    if val:
+                        ip = val.split(",")[0].strip()
+                        if ip and ip not in ("127.0.0.1", "::1", "localhost"):
+                            return ip
+        except Exception:
+            pass
+        return None
+
     gps_lat_param = st.query_params.get("user_lat")
     gps_lon_param = st.query_params.get("user_lon")
+    gps_loc_param = st.query_params.get("user_loc")
     if gps_lat_param and gps_lon_param:
         try:
-            st.session_state.my_location_coords = (float(gps_lat_param), float(gps_lon_param), "Device GPS Position")
+            st.session_state.my_location_coords = (
+                float(gps_lat_param),
+                float(gps_lon_param),
+                gps_loc_param or "Device GPS Position",
+            )
         except ValueError:
             pass
 
@@ -718,7 +737,8 @@ def my_location_area() -> tuple[AnalysisArea | None, str | None]:
     with col_btn1:
         if st.button("🌐 Detect Network Location", use_container_width=True, help="Fast zero-prompt geolocation via network IP"):
             try:
-                lat, lon, label = get_ip_location()
+                client_ip = _get_client_ip_from_request()
+                lat, lon, label = get_ip_location(ip=client_ip)
                 st.session_state.my_location_coords = (lat, lon, label)
             except LocationError as exc:
                 return None, str(exc)
@@ -726,40 +746,105 @@ def my_location_area() -> tuple[AnalysisArea | None, str | None]:
     with col_btn2:
         st.components.v1.html(
             """
-            <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
-              <button onclick="requestGps()" style="
+            <div style="font-family: 'Martian Mono', ui-monospace, monospace;">
+              <button id="gps-btn" onclick="startLocationDetection()" style="
                 width: 100%;
                 background: #ff6a1a;
                 color: #07080a;
                 border: 1px solid rgba(236, 232, 224, 0.22);
                 border-radius: 0px;
                 padding: 9px 16px;
-                font-family: 'Martian Mono', ui-monospace, monospace;
+                font-family: inherit;
                 font-size: 11.5px;
                 font-weight: 500;
                 text-transform: uppercase;
                 letter-spacing: 0.04em;
                 cursor: pointer;
-              ">📍 Use Device GPS</button>
+              ">📍 Use Device GPS (Browser)</button>
+              <div id="gps-msg" style="font-size: 11px; color: #ff6a1a; margin-top: 6px; display: none; line-height: 1.4;"></div>
             </div>
             <script>
-              function requestGps() {
-                if (navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition(function(pos) {
-                    const url = new URL(window.parent.location.href);
-                    url.searchParams.set('user_lat', pos.coords.latitude.toFixed(6));
-                    url.searchParams.set('user_lon', pos.coords.longitude.toFixed(6));
-                    window.parent.location.href = url.href;
-                  }, function(err) {
-                    alert('GPS location error: ' + err.message);
-                  }, { enableHighAccuracy: true, timeout: 10000 });
-                } else {
-                  alert('Geolocation is not supported by your browser.');
+              function showStatus(text, isError) {
+                const el = document.getElementById('gps-msg');
+                if (!el) return;
+                el.style.display = 'block';
+                el.style.color = isError ? '#ff4b4b' : '#00e5a3';
+                el.innerHTML = text;
+              }
+
+              function applyCoords(lat, lon, locName) {
+                const targetUrl = '?user_lat=' + lat.toFixed(5) + '&user_lon=' + lon.toFixed(5) + (locName ? '&user_loc=' + encodeURIComponent(locName) : '');
+                showStatus('✅ Found: ' + lat.toFixed(4) + '°, ' + lon.toFixed(4) + '° (' + (locName || 'GPS') + '). Applying...', false);
+                try {
+                  if (window.parent && window.parent.location) {
+                    const u = new URL(window.parent.location.href);
+                    u.searchParams.set('user_lat', lat.toFixed(5));
+                    u.searchParams.set('user_lon', lon.toFixed(5));
+                    if (locName) u.searchParams.set('user_loc', locName);
+                    window.parent.location.href = u.href;
+                    return;
+                  }
+                } catch(e) {}
+
+                showStatus('✅ Coordinates detected: ' + lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°<br><a href="' + targetUrl + '" target="_top" style="color: #ff6a1a; text-decoration: underline; font-weight: bold;">[ Click here to apply coordinates ]</a>', false);
+                try {
+                  const link = document.createElement('a');
+                  link.href = targetUrl;
+                  link.target = '_top';
+                  document.body.appendChild(link);
+                  link.click();
+                } catch(e) {}
+              }
+
+              function fallbackToClientIp() {
+                showStatus('⏳ Falling back to browser public IP lookup...', false);
+                fetch('https://ipapi.co/json/')
+                  .then(r => r.json())
+                  .then(d => {
+                    if (d.latitude && d.longitude) {
+                      const name = [d.city, d.region, d.country_name].filter(Boolean).join(', ');
+                      applyCoords(d.latitude, d.longitude, name);
+                    } else {
+                      showStatus('⚠️ Could not determine location. Please enter coordinates above.', true);
+                    }
+                  })
+                  .catch(function() {
+                    fetch('https://ipwho.is/')
+                      .then(r => r.json())
+                      .then(d => {
+                        if (d.latitude && d.longitude) {
+                          const name = [d.city, d.region, d.country].filter(Boolean).join(', ');
+                          applyCoords(d.latitude, d.longitude, name);
+                        } else {
+                          showStatus('⚠️ Location unavailable. Please enter coordinates manually.', true);
+                        }
+                      })
+                      .catch(function() {
+                        showStatus('⚠️ Could not acquire browser location. Please enter coordinates manually.', true);
+                      });
+                  });
+              }
+
+              function startLocationDetection() {
+                showStatus('⏳ Requesting device position from browser...', false);
+                if (!navigator.geolocation) {
+                  fallbackToClientIp();
+                  return;
                 }
+                navigator.geolocation.getCurrentPosition(
+                  function(pos) {
+                    applyCoords(pos.coords.latitude, pos.coords.longitude, 'Device GPS Position');
+                  },
+                  function(err) {
+                    showStatus('⚠️ Device GPS unavailable (' + err.message + '). Trying browser network IP...', true);
+                    fallbackToClientIp();
+                  },
+                  { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+                );
               }
             </script>
             """,
-            height=45,
+            height=70,
         )
 
     coords_data = st.session_state.get("my_location_coords")
