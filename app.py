@@ -1580,13 +1580,17 @@ st.markdown(
 
       /* Streamlit Header & Navigation Chrome */
       header[data-testid="stHeader"] {
-        background: var(--ink-0) !important;
-        border-bottom: 1px solid var(--line) !important;
+        background: transparent !important;
+        height: 2.0rem !important;
+        min-height: 2.0rem !important;
+        border-bottom: none !important;
       }
-      .main .block-container {
-        padding-top: 1.5rem !important;
+      .main .block-container,
+      [data-testid="stMainBlockContainer"],
+      .stMainBlockContainer {
+        padding-top: 0.25rem !important;
         padding-bottom: 3.5rem !important;
-        max-width: 1280px !important;
+        max-width: 1400px !important;
       }
 
       /* Typography */
@@ -2153,17 +2157,15 @@ st.markdown(
       }
 
       /* App Header Bar */
-      .app-header-container {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 16px;
-        margin-bottom: 20px;
-        background-color: var(--ink-1);
-        border: 1px solid var(--line);
-        border-left: 3px solid var(--signal);
-        gap: 12px;
+      .app-header-container,
+      div[data-testid="stVerticalBlock"]:has(#cropscope-header-anchor) {
+        display: block;
+        width: 100% !important;
+        padding: 12px 18px !important;
+        margin-bottom: 16px !important;
+        background-color: var(--ink-1) !important;
+        border: 1px solid var(--line) !important;
+        border-left: 4px solid var(--signal) !important;
       }
       .app-header-brand-wrap {
         display: flex;
@@ -2171,26 +2173,15 @@ st.markdown(
         gap: 12px;
       }
       .app-header-icon {
-        font-size: 24px;
+        font-size: 28px;
         line-height: 1;
       }
       .app-header-title {
         font-family: var(--font-mono);
-        font-size: 15px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
         color: var(--bone);
-        text-transform: uppercase;
-      }
-      .app-header-badge {
-        font-family: var(--font-mono);
-        font-size: 9.5px;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        background: rgba(255, 106, 26, 0.15);
-        color: var(--signal);
-        border: 1px solid rgba(255, 106, 26, 0.35);
-        padding: 2px 7px;
         text-transform: uppercase;
       }
       .app-header-tagline {
@@ -2374,95 +2365,111 @@ def render_footer(current_lang: str) -> None:
     )
 
 
-def render_header(current_lang: str) -> None:
-    """Renders the top application telemetry and branding header."""
+def render_header(current_lang: str) -> bool:
+    """Renders the top application telemetry and branding header with integrated controls."""
     app_title = t("app_title", current_lang)
     tagline = t("app_subtitle", current_lang)
-    st.markdown(
-        f"""
-        <div class="app-header-container" data-testid="cropscope-header">
-          <div class="app-header-brand-wrap">
-            <span class="app-header-icon">🛰️</span>
-            <div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="app-header-title">{app_title}</span>
-                <span class="app-header-badge">LIVE // v1.2</span>
-              </div>
-              <div class="app-header-tagline">{tagline}</div>
-            </div>
-          </div>
-          <div class="app-header-telemetry">
-            <span class="telemetry-chip"><span class="pulse-dot-live"></span> STAC / SENTINEL-2 L2A</span>
-            <span class="telemetry-chip"><span class="pulse-dot-live"></span> OPEN-METEO GLOBAL</span>
-            <span class="telemetry-chip"><span class="pulse-dot-ai"></span> KISAN MITRA AI</span>
-            <span class="telemetry-chip" style="color: var(--bone-3);">ESA COPERNICUS &bull; NASA GIBS</span>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+
+    with st.container():
+        st.markdown('<span id="cropscope-header-anchor" style="display:none;"></span>', unsafe_allow_html=True)
+        head_brand_col, head_controls_col = st.columns([1.5, 1.5], vertical_alignment="center")
+
+        with head_brand_col:
+            st.markdown(
+                f"""
+                <div class="app-header-container" data-testid="cropscope-header" style="border: none; padding: 0; margin: 0; background: transparent; width: 100%;">
+                  <div class="app-header-brand-wrap">
+                    <span class="app-header-icon">🛰️</span>
+                    <div>
+                      <div class="app-header-title">{app_title}</div>
+                      <div class="app-header-tagline">{tagline}</div>
+                    </div>
+                  </div>
+                  <div class="app-header-telemetry" style="margin-top: 8px;">
+                    <span class="telemetry-chip"><span class="pulse-dot-live"></span> STAC / SENTINEL-2 L2A</span>
+                    <span class="telemetry-chip"><span class="pulse-dot-live"></span> OPEN-METEO GLOBAL</span>
+                    <span class="telemetry-chip"><span class="pulse-dot-ai"></span> KISAN MITRA AI</span>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        with head_controls_col:
+            auth_col, theme_col, lang_col = st.columns([1.5, 0.7, 0.8], vertical_alignment="center")
+
+            with theme_col:
+                def _on_theme_change() -> None:
+                    st.session_state["theme"] = st.session_state["theme_selector"]
+
+                theme_options = ["Dark", "Light"]
+                active_theme = st.session_state.get("theme", "Dark")
+                cur_theme_idx = theme_options.index(active_theme) if active_theme in theme_options else 0
+                st.selectbox(
+                    "🌓 Theme / थीम",
+                    theme_options,
+                    index=cur_theme_idx,
+                    key="theme_selector",
+                    on_change=_on_theme_change,
+                    help="Switch between Dark and Light mode interface themes.",
+                )
+
+            with lang_col:
+                lang_labels = get_language_names()
+                default_label = SUPPORTED_LANGUAGES.get(current_lang, {}).get("label", "English")
+                try:
+                    default_idx = lang_labels.index(default_label)
+                except ValueError:
+                    default_idx = 0
+
+                def _on_lang_change() -> None:
+                    sel = st.session_state.get("language_selector")
+                    if sel:
+                        st.session_state["selected_language"] = get_code_from_label(sel)
+
+                selected_label = st.selectbox(
+                    "🌐 Language / भाषा",
+                    lang_labels,
+                    index=default_idx,
+                    key="language_selector",
+                    on_change=_on_lang_change,
+                    help="Select language for Kisan Mitra AI field advisory and explanations.",
+                )
+                current_lang = get_code_from_label(selected_label)
+                st.session_state["selected_language"] = current_lang
+
+            with auth_col:
+                show_auth = render_auth_header_widget(current_lang)
+
+    return show_auth
 
 
-current_lang = st.session_state.get("selected_language", "en")
-render_header(current_lang)
+if "language_selector" in st.session_state and st.session_state["language_selector"]:
+    current_lang = get_code_from_label(st.session_state["language_selector"])
+    st.session_state["selected_language"] = current_lang
+else:
+    current_lang = st.session_state.get("selected_language", "en")
+
+show_auth = render_header(current_lang)
 render_orbital_recon_easter_egg()
 
-hero_col, auth_col, theme_col, lang_col = st.columns([1.8, 1.0, 0.6, 0.6])
-with auth_col:
-    show_auth = render_auth_header_widget(current_lang)
-
-with theme_col:
-    def _on_theme_change() -> None:
-        st.session_state["theme"] = st.session_state["theme_selector"]
-
-    theme_options = ["Dark", "Light"]
-    active_theme = st.session_state.get("theme", "Dark")
-    cur_theme_idx = theme_options.index(active_theme) if active_theme in theme_options else 0
-    st.selectbox(
-        "🌓 Theme / थीम",
-        theme_options,
-        index=cur_theme_idx,
-        key="theme_selector",
-        on_change=_on_theme_change,
-        help="Switch between Dark and Light mode interface themes.",
-    )
-
-with lang_col:
-    lang_labels = get_language_names()
-    default_lang = st.session_state.get("selected_language", "en")
-    default_label = SUPPORTED_LANGUAGES.get(default_lang, {}).get("label", "English")
-    try:
-        default_idx = lang_labels.index(default_label)
-    except ValueError:
-        default_idx = 0
-    selected_label = st.selectbox(
-        "🌐 Language / भाषा",
-        lang_labels,
-        index=default_idx,
-        key="language_selector",
-        help="Select language for Kisan Mitra AI field advisory and explanations.",
-    )
-    current_lang = get_code_from_label(selected_label)
-    st.session_state["selected_language"] = current_lang
-
-with hero_col:
-    kicker_txt = t("hero_kicker", current_lang)
-    prefix_txt = t("hero_title_prefix", current_lang)
-    crops_txt = t("hero_title_crops", current_lang)
-    suffix_txt = t("hero_title_suffix", current_lang)
-    sub_txt = t("hero_sub", current_lang)
-    st.markdown(
-        f"""
-        <div class="hero-container" style="border-bottom: none; margin-bottom: 0px; padding-bottom: 0px;">
-          <div class="hero-kicker"><span class="hero-kicker-dot"></span> {kicker_txt}</div>
-          <div class="hero-title">{prefix_txt}<span class="hero-serif">{crops_txt}</span>{suffix_txt}</div>
-          <div class="hero-sub">{sub_txt}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
 render_auth_drawer(current_lang, show_auth)
+
+kicker_txt = t("hero_kicker", current_lang)
+prefix_txt = t("hero_title_prefix", current_lang)
+crops_txt = t("hero_title_crops", current_lang)
+suffix_txt = t("hero_title_suffix", current_lang)
+sub_txt = t("hero_sub", current_lang)
+st.markdown(
+    f"""
+    <div class="hero-container" style="border-bottom: none; margin-bottom: 0px; padding-bottom: 0px;">
+      <div class="hero-kicker"><span class="hero-kicker-dot"></span> {kicker_txt}</div>
+      <div class="hero-title">{prefix_txt}<span class="hero-serif">{crops_txt}</span>{suffix_txt}</div>
+      <div class="hero-sub">{sub_txt}</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.markdown('<div style="border-bottom: 1px solid var(--line); margin-bottom: 24px;"></div>', unsafe_allow_html=True)
 
