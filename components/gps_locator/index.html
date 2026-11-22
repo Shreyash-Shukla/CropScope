@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Martian Mono', ui-monospace, monospace;
+      background: transparent;
+      overflow: hidden;
+    }
+    .gps-btn {
+      width: 100%;
+      box-sizing: border-box;
+      background: #ff6a1a;
+      color: #07080a;
+      border: 1px solid rgba(236, 232, 224, 0.22);
+      border-radius: 0px;
+      padding: 10px 16px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 150ms ease;
+    }
+    .gps-btn:hover {
+      background: #ff8340;
+    }
+    .gps-btn:disabled {
+      background: rgba(236, 232, 224, 0.15);
+      color: rgba(236, 232, 224, 0.4);
+      cursor: not-allowed;
+    }
+    .gps-status {
+      margin-top: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <button id="gps-button" class="gps-btn" onclick="requestDeviceGps()">
+    <span>📍</span> <span>Use Device GPS Position</span>
+  </button>
+  <div id="gps-status" class="gps-status"></div>
+
+  <script>
+    function sendMessage(type, data) {
+      window.parent.postMessage(Object.assign({
+        isStreamlitMessage: true,
+        type: type
+      }, data), "*");
+    }
+
+    function setFrameHeight(height) {
+      sendMessage("streamlit:setFrameHeight", { height: height || document.body.offsetHeight });
+    }
+
+    function sendValueToStreamlit(value) {
+      sendMessage("streamlit:setComponentValue", { value: value });
+    }
+
+    // Inform Streamlit that the component is ready
+    sendMessage("streamlit:componentReady", { apiVersion: 1 });
+    setFrameHeight(46);
+
+    window.addEventListener("message", function(event) {
+      if (event.data && event.data.type === "streamlit:render") {
+        setFrameHeight();
+      }
+    });
+
+    function showStatus(text, color) {
+      const el = document.getElementById("gps-status");
+      el.style.display = "block";
+      el.style.color = color || "#ff6a1a";
+      el.innerText = text;
+      setFrameHeight(75);
+    }
+
+    function requestDeviceGps() {
+      const btn = document.getElementById("gps-button");
+      btn.disabled = true;
+      showStatus("🛰️ Requesting device GPS coordinates from browser...", "#ff6a1a");
+
+      if (!navigator.geolocation) {
+        showStatus("⚠️ Geolocation is not supported by your browser.", "#ff4b4b");
+        btn.disabled = false;
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          const acc = position.coords.accuracy ? Math.round(position.coords.accuracy) : null;
+          const accText = acc ? ` (accuracy: ±${acc}m)` : '';
+          showStatus(`✅ GPS Position Locked: ${lat.toFixed(5)}°, ${lon.toFixed(5)}°${accText}`, "#00e5a3");
+          btn.disabled = false;
+
+          sendValueToStreamlit({
+            lat: lat,
+            lon: lon,
+            accuracy: acc,
+            label: "Device GPS Position",
+            timestamp: Date.now()
+          });
+        },
+        function(error) {
+          btn.disabled = false;
+          let msg = "Could not get device GPS.";
+          if (error.code === error.PERMISSION_DENIED) {
+            msg = "Location permission denied. Please allow location access in your browser.";
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            msg = "GPS position unavailable. Please ensure location is enabled.";
+          } else if (error.code === error.TIMEOUT) {
+            msg = "GPS request timed out. Please retry.";
+          }
+          showStatus("⚠️ " + msg, "#ff4b4b");
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 30000
+        }
+      );
+    }
+  </script>
+</body>
+</html>

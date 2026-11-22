@@ -703,23 +703,26 @@ def coordinate_area() -> tuple[AnalysisArea | None, str | None]:
         return area, None
 
 
+_GPS_LOCATOR_PATH = Path(__file__).resolve().parent / "components" / "gps_locator"
+_gps_locator_component = st.components.v1.declare_component("gps_locator", path=str(_GPS_LOCATOR_PATH))
+
+
 def my_location_area() -> tuple[AnalysisArea | None, str | None]:
-    st.write("Automatically detect your current field location using device GPS or network geolocation.")
+    st.write("Automatically detect your current field location using device GPS.")
 
-    def _get_client_ip_from_request() -> Optional[str]:
+    # Check for incoming GPS component value
+    gps_result = _gps_locator_component(key="device_gps_locator")
+    if gps_result and isinstance(gps_result, dict) and "lat" in gps_result and "lon" in gps_result:
         try:
-            if hasattr(st, "context") and hasattr(st.context, "headers"):
-                h = st.context.headers
-                for key in ["x-forwarded-for", "x-real-ip", "cf-connecting-ip"]:
-                    val = h.get(key)
-                    if val:
-                        ip = val.split(",")[0].strip()
-                        if ip and ip not in ("127.0.0.1", "::1", "localhost"):
-                            return ip
-        except Exception:
+            st.session_state.my_location_coords = (
+                float(gps_result["lat"]),
+                float(gps_result["lon"]),
+                gps_result.get("label", "Device GPS Position"),
+            )
+        except (ValueError, TypeError):
             pass
-        return None
 
+    # Check query params fallback as well
     gps_lat_param = st.query_params.get("user_lat")
     gps_lon_param = st.query_params.get("user_lon")
     gps_loc_param = st.query_params.get("user_loc")
@@ -733,136 +736,42 @@ def my_location_area() -> tuple[AnalysisArea | None, str | None]:
         except ValueError:
             pass
 
-    col_btn1, col_btn2 = st.columns([1, 1])
-    with col_btn1:
-        if st.button("🌐 Detect Network Location", use_container_width=True, help="Fast zero-prompt geolocation via network IP"):
-            try:
-                client_ip = _get_client_ip_from_request()
-                lat, lon, label = get_ip_location(ip=client_ip)
-                st.session_state.my_location_coords = (lat, lon, label)
-            except LocationError as exc:
-                return None, str(exc)
-
-    with col_btn2:
-        st.components.v1.html(
-            """
-            <div style="font-family: 'Martian Mono', ui-monospace, monospace;">
-              <button id="gps-btn" onclick="startLocationDetection()" style="
-                width: 100%;
-                background: #ff6a1a;
-                color: #07080a;
-                border: 1px solid rgba(236, 232, 224, 0.22);
-                border-radius: 0px;
-                padding: 9px 16px;
-                font-family: inherit;
-                font-size: 11.5px;
-                font-weight: 500;
-                text-transform: uppercase;
-                letter-spacing: 0.04em;
-                cursor: pointer;
-              ">📍 Use Device GPS (Browser)</button>
-              <div id="gps-msg" style="font-size: 11px; color: #ff6a1a; margin-top: 6px; display: none; line-height: 1.4;"></div>
-            </div>
-            <script>
-              function showStatus(text, isError) {
-                const el = document.getElementById('gps-msg');
-                if (!el) return;
-                el.style.display = 'block';
-                el.style.color = isError ? '#ff4b4b' : '#00e5a3';
-                el.innerHTML = text;
-              }
-
-              function applyCoords(lat, lon, locName) {
-                const targetUrl = '?user_lat=' + lat.toFixed(5) + '&user_lon=' + lon.toFixed(5) + (locName ? '&user_loc=' + encodeURIComponent(locName) : '');
-                showStatus('✅ Found: ' + lat.toFixed(4) + '°, ' + lon.toFixed(4) + '° (' + (locName || 'GPS') + '). Applying...', false);
-                try {
-                  if (window.parent && window.parent.location) {
-                    const u = new URL(window.parent.location.href);
-                    u.searchParams.set('user_lat', lat.toFixed(5));
-                    u.searchParams.set('user_lon', lon.toFixed(5));
-                    if (locName) u.searchParams.set('user_loc', locName);
-                    window.parent.location.href = u.href;
-                    return;
-                  }
-                } catch(e) {}
-
-                showStatus('✅ Coordinates detected: ' + lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°<br><a href="' + targetUrl + '" target="_top" style="color: #ff6a1a; text-decoration: underline; font-weight: bold;">[ Click here to apply coordinates ]</a>', false);
-                try {
-                  const link = document.createElement('a');
-                  link.href = targetUrl;
-                  link.target = '_top';
-                  document.body.appendChild(link);
-                  link.click();
-                } catch(e) {}
-              }
-
-              function fallbackToClientIp() {
-                showStatus('⏳ Falling back to browser public IP lookup...', false);
-                fetch('https://ipapi.co/json/')
-                  .then(r => r.json())
-                  .then(d => {
-                    if (d.latitude && d.longitude) {
-                      const name = [d.city, d.region, d.country_name].filter(Boolean).join(', ');
-                      applyCoords(d.latitude, d.longitude, name);
-                    } else {
-                      showStatus('⚠️ Could not determine location. Please enter coordinates above.', true);
-                    }
-                  })
-                  .catch(function() {
-                    fetch('https://ipwho.is/')
-                      .then(r => r.json())
-                      .then(d => {
-                        if (d.latitude && d.longitude) {
-                          const name = [d.city, d.region, d.country].filter(Boolean).join(', ');
-                          applyCoords(d.latitude, d.longitude, name);
-                        } else {
-                          showStatus('⚠️ Location unavailable. Please enter coordinates manually.', true);
-                        }
-                      })
-                      .catch(function() {
-                        showStatus('⚠️ Could not acquire browser location. Please enter coordinates manually.', true);
-                      });
-                  });
-              }
-
-              function startLocationDetection() {
-                showStatus('⏳ Requesting device position from browser...', false);
-                if (!navigator.geolocation) {
-                  fallbackToClientIp();
-                  return;
-                }
-                navigator.geolocation.getCurrentPosition(
-                  function(pos) {
-                    applyCoords(pos.coords.latitude, pos.coords.longitude, 'Device GPS Position');
-                  },
-                  function(err) {
-                    showStatus('⚠️ Device GPS unavailable (' + err.message + '). Trying browser network IP...', true);
-                    fallbackToClientIp();
-                  },
-                  { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-                );
-              }
-            </script>
-            """,
-            height=70,
-        )
-
     coords_data = st.session_state.get("my_location_coords")
     if not coords_data:
-        st.info("Click **'🌐 Detect Network Location'** or **'📍 Use Device GPS'** above to pinpoint your field.")
+        st.info("Click **'📍 Use Device GPS Position'** above to detect your field coordinates, or enter them below.")
+        c_lat, c_lon, c_btn = st.columns([1.5, 1.5, 1])
+        with c_lat:
+            manual_lat = st.number_input("Latitude (°N/S)", min_value=-90.0, max_value=90.0, value=0.0, format="%.5f", key="manual_gps_lat")
+        with c_lon:
+            manual_lon = st.number_input("Longitude (°E/W)", min_value=-180.0, max_value=180.0, value=0.0, format="%.5f", key="manual_gps_lon")
+        with c_btn:
+            st.write("&nbsp;")
+            if st.button("Set Coords", use_container_width=True, key="btn_set_manual_gps"):
+                if manual_lat != 0.0 or manual_lon != 0.0:
+                    st.session_state.my_location_coords = (manual_lat, manual_lon, "Manual GPS Position")
+                    st.rerun()
+
         preview_area(SAMPLE_AREA, location_title="Global Orbital Console (Locate Field Above)")
         return None, None
 
     lat, lon, label = coords_data
     st.success(f"📍 Selected Location: **{label}** (`{lat:.5f}°, {lon:.5f}°`)")
 
-    extent_choice = st.selectbox(
-        "Field extent around your location",
-        ["250 m (~6 ha)", "500 m (~25 ha)", "1.0 km (~100 ha)", "2.0 km (~400 ha)"],
-        index=1,
-        help="Select the analysis window size surrounding your detected location.",
-        key="my_loc_extent_select",
-    )
+    col_tune1, col_tune2 = st.columns([2, 1])
+    with col_tune1:
+        extent_choice = st.selectbox(
+            "Field extent around your location",
+            ["250 m (~6 ha)", "500 m (~25 ha)", "1.0 km (~100 ha)", "2.0 km (~400 ha)"],
+            index=1,
+            help="Select the analysis window size surrounding your detected location.",
+            key="my_loc_extent_select",
+        )
+    with col_tune2:
+        st.write("&nbsp;")
+        if st.button("🔄 Reset / Re-detect", use_container_width=True, key="btn_reset_gps"):
+            st.session_state.pop("my_location_coords", None)
+            st.rerun()
+
     side_km = {
         "250 m (~6 ha)": 0.25,
         "500 m (~25 ha)": 0.50,
@@ -2486,9 +2395,17 @@ if saved_area:
     field_title = f"🌾 {active_f.get('name', 'Saved Field')}" if active_f else "Saved Field"
     preview_area(area, location_title=field_title)
 else:
+    mode_options = ["Search location", "Enter coordinates", "Use my location", "Draw on map", "Use sample preset"]
+    default_mode_idx = 0
+    if st.query_params.get("user_lat") and st.query_params.get("user_lon"):
+        default_mode_idx = 2
+    elif "location_mode" in st.session_state and st.session_state["location_mode"] in mode_options:
+        default_mode_idx = mode_options.index(st.session_state["location_mode"])
+
     mode = st.radio(
         t("choose_area_mode", current_lang),
-        ["Search location", "Enter coordinates", "Use my location", "Draw on map", "Use sample preset"],
+        mode_options,
+        index=default_mode_idx,
         format_func=lambda m: format_mode_label(m, current_lang),
         horizontal=True,
     )
