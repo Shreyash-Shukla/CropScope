@@ -94,30 +94,195 @@ from db.chat import create_chat_session, get_chat_history, list_chat_sessions, s
 
 
 def add_map_layers(map_obj: folium.Map) -> None:
+    """Add labeled basemaps and toggleable reference overlays so farmers can easily orient themselves."""
+    # 1. Primary Base Layer: Satellite + Labels (Hybrid)
+    # Provides sub-meter satellite imagery with crystal-clear village names, town labels, roads, and boundaries.
     folium.TileLayer(
-        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap &copy; CartoDB",
-        name="Day / Light Mode",
+        tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+        attr="&copy; Google Maps",
+        name="🛰️ Satellite + Labels (Hybrid)",
+        max_zoom=20,
+    ).add_to(map_obj)
+
+    # 2. Detailed OpenStreetMap: High-contrast street, village, and topography labels
+    folium.TileLayer(
+        tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        name="🗺️ OpenStreetMap (Villages & Roads)",
         max_zoom=19,
     ).add_to(map_obj)
+
+    # 3. Google Maps Standard Roadmap: Comprehensive road network and place markers
     folium.TileLayer(
-        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap &copy; CartoDB",
-        name="Night / Dark Mode",
-        max_zoom=19,
+        tiles="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+        attr="&copy; Google Maps",
+        name="📍 Google Maps (Roads & Labels)",
+        max_zoom=20,
     ).add_to(map_obj)
+
+    # 4. Pure Optical Satellite Imagery (Esri World Imagery) - clean view of crop fields without labels
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         attr="&copy; Esri World Imagery",
-        name="Satellite View (Sub-Meter)",
+        name="🛰️ Satellite View (Pure Optical, Sub-Meter)",
         max_zoom=19,
     ).add_to(map_obj)
+
+    # 5. CartoDB Voyager: Full-color, high-contrast labeled basemap
+    folium.TileLayer(
+        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/rastertiles/voyager/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap &copy; CartoDB",
+        name="🎨 CartoDB Voyager (Colored & Labeled)",
+        max_zoom=19,
+    ).add_to(map_obj)
+
+    # 6. CartoDB Day / Light Mode (Positron)
+    folium.TileLayer(
+        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap &copy; CartoDB",
+        name="☀️ Day / Light Mode",
+        max_zoom=19,
+    ).add_to(map_obj)
+
+    # 7. CartoDB Night / Dark Mode (Dark Matter)
+    folium.TileLayer(
+        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap &copy; CartoDB",
+        name="🌙 Night / Dark Mode",
+        max_zoom=19,
+    ).add_to(map_obj)
+
+    # Reference Overlays (can be checked on top of ANY active base layer)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        attr="&copy; Esri World Boundaries and Places",
+        name="🏷️ Village & Place Names Overlay",
+        overlay=True,
+        control=True,
+        show=False,
+        max_zoom=19,
+    ).add_to(map_obj)
+
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+        attr="&copy; Esri World Transportation",
+        name="🛣️ Roads & Highways Overlay",
+        overlay=True,
+        control=True,
+        show=False,
+        max_zoom=19,
+    ).add_to(map_obj)
+
     folium.LayerControl(position="topright", collapsed=True).add_to(map_obj)
 
 
+def get_draw_map_initial_location() -> tuple[list[float], int]:
+    """Determine best initial map center and zoom level so farmer is directly near farmland."""
+    # 1. Explicit user jump via session state focus
+    if "draw_map_focus_target" in st.session_state:
+        focus = st.session_state["draw_map_focus_target"]
+        if isinstance(focus, (list, tuple)) and len(focus) == 2:
+            return [float(focus[0]), float(focus[1])], st.session_state.get("draw_map_focus_zoom", 14)
+
+    # 2. Existing drawn rectangle in session state
+    drawings = st.session_state.get("map_drawings", [])
+    if drawings:
+        try:
+            drawn_area = rectangle_from_geojson(drawings[0])
+            return list(drawn_area.center), 15
+        except Exception:
+            pass
+
+    # 3. GPS Coordinates detected or entered
+    gps_coords = st.session_state.get("my_location_coords")
+    if gps_coords and len(gps_coords) >= 2:
+        try:
+            return [float(gps_coords[0]), float(gps_coords[1])], 14
+        except Exception:
+            pass
+
+    # 4. Saved active field for logged-in farmer
+    try:
+        active_f = get_active_field()
+        if active_f and "latitude" in active_f and "longitude" in active_f:
+            return [float(active_f["latitude"]), float(active_f["longitude"])], 15
+    except Exception:
+        pass
+
+    # 5. Query parameters fallback
+    try:
+        qp_lat = st.query_params.get("user_lat")
+        qp_lon = st.query_params.get("user_lon")
+        if qp_lat and qp_lon:
+            return [float(qp_lat), float(qp_lon)], 14
+    except Exception:
+        pass
+
+    # 6. Default to agricultural heartland (Karnal, Haryana agricultural hub - [29.6857, 76.9905], zoom 10)
+    return [29.6857, 76.9905], 10
+
+
 def draw_area() -> tuple[AnalysisArea | None, str | None]:
-    st.write("Zoom to your location, choose the rectangle tool at the top left, and drag across one field. Use the layer icon (top right) to switch between Day/Night/Satellite maps. Use the crosshair icon to jump to your location. Use the trash tool to clear before drawing another.")
-    map_view = folium.Map(location=[18, 0], zoom_start=2, max_zoom=19, control_scale=True, tiles=None)
+    lang = st.session_state.get("selected_language", "en")
+    st.markdown(
+        f"""
+        <div style="background: var(--ink-2, #181d24); border: 1px solid var(--line, #28303d); border-radius: 6px; padding: 12px 16px; margin-bottom: 12px;">
+            <div style="font-weight: 600; font-size: 14px; color: var(--paper, #f0f3f6); margin-bottom: 4px;">
+                {t('draw_map_heading', lang)}
+            </div>
+            <div style="font-size: 12.5px; color: var(--sand, #a8b3cf); line-height: 1.5;">
+                • <strong>Labelled Satellite View</strong>: Village names, town labels, roads, and boundaries are overlaid directly on satellite imagery so you know exactly where your farm is.<br>
+                • <strong>Switch Map Styles</strong>: Click the layer icon (top right <span style="font-size:14px;">⛶</span>) to switch between <strong>Satellite + Labels (Hybrid)</strong>, <strong>OpenStreetMap</strong>, <strong>Google Maps</strong>, or <strong>Pure Satellite</strong>. Toggle place names or roads overlays anytime.<br>
+                • <strong>Draw Field</strong>: Click the rectangle icon (<strong>⬚</strong>) on the top-left toolbar and drag over your field. Use the trash can (<strong>🗑️</strong>) to clear before drawing another.<br>
+                • <strong>Search & GPS</strong>: Use the search glass (<strong>🔍</strong>) on the map to search any village, town, or PIN code, or click the crosshairs (<strong>🎯</strong>) to fly to your GPS position.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    preset_jumps = {
+        "🌾 Karnal (Haryana)": ([29.6857, 76.9905], 14),
+        "🚜 Ludhiana (Punjab)": ([30.9010, 75.8573], 14),
+        "🌱 Nashik (Maharashtra)": ([19.9975, 73.7898], 14),
+        "🌾 Guntur (Andhra)": ([16.3067, 80.4365], 14),
+        "🥖 Beauce (France)": ([48.2500, 1.7000], 14),
+        "🍇 Salinas (USA)": ([36.6777, -121.6555], 14),
+        "🌾 Riverina (Australia)": ([-34.4500, 146.0500], 14),
+    }
+
+    def _on_focus_pill_change():
+        pill = st.session_state.get("draw_quick_focus_pill")
+        if pill and pill in preset_jumps:
+            coords, zoom = preset_jumps[pill]
+            st.session_state["draw_map_focus_target"] = coords
+            st.session_state["draw_map_focus_zoom"] = zoom
+            st.session_state.map_drawings = []
+
+    col_pill_label, col_pills = st.columns([1.3, 5.7], vertical_alignment="center")
+    with col_pill_label:
+        st.caption(f"**{t('draw_quick_focus_label', lang)}**")
+    with col_pills:
+        st.pills(
+            t("draw_quick_focus_label", lang),
+            list(preset_jumps.keys()),
+            key="draw_quick_focus_pill",
+            on_change=_on_focus_pill_change,
+            label_visibility="collapsed",
+        )
+
+    initial_loc, initial_zoom = get_draw_map_initial_location()
+
+    focus_key = st.session_state.get("draw_quick_focus_pill", "default")
+    map_key = f"area_map_{focus_key}"
+
+    map_view = folium.Map(
+        location=initial_loc,
+        zoom_start=initial_zoom,
+        max_zoom=20,
+        control_scale=True,
+        tiles=None,
+    )
     add_map_layers(map_view)
     Geocoder(collapsed=True).add_to(map_view)
     LocateControl(auto_start=False, flyTo=True, keepCurrentZoomLevel=False).add_to(map_view)
@@ -128,7 +293,7 @@ def draw_area() -> tuple[AnalysisArea | None, str | None]:
     ).add_to(map_view)
     map_state = st_folium(
         map_view,
-        key="area_map",
+        key=map_key,
         height=480,
         use_container_width=True,
         returned_objects=["all_drawings"],
@@ -818,7 +983,7 @@ def preview_area(area: AnalysisArea, location_title: str = "Selected Field") -> 
             "🛰️ **Orbit-to-Field Hybrid View**: High-resolution optical satellite imagery (Esri World Imagery + Sentinel-2, up to Zoom 19 / ~0.5m/pixel). "
             "Use the map controls below to inspect individual crop rows, trees, and access roads."
         )
-        preview = folium.Map(location=list(area.center), zoom_start=15, max_zoom=19, control_scale=True, tiles=None)
+        preview = folium.Map(location=list(area.center), zoom_start=15, max_zoom=20, control_scale=True, tiles=None)
         folium.Rectangle(
             bounds=[[area.south, area.west], [area.north, area.east]],
             color="#ff6a1a",
