@@ -128,30 +128,6 @@ def add_map_layers(map_obj: folium.Map) -> None:
         max_zoom=19,
     ).add_to(map_obj)
 
-    # 5. CartoDB Voyager: Full-color, high-contrast labeled basemap
-    folium.TileLayer(
-        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/rastertiles/voyager/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap &copy; CartoDB",
-        name="🎨 CartoDB Voyager (Colored & Labeled)",
-        max_zoom=19,
-    ).add_to(map_obj)
-
-    # 6. CartoDB Day / Light Mode (Positron)
-    folium.TileLayer(
-        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap &copy; CartoDB",
-        name="☀️ Day / Light Mode",
-        max_zoom=19,
-    ).add_to(map_obj)
-
-    # 7. CartoDB Night / Dark Mode (Dark Matter)
-    folium.TileLayer(
-        tiles="https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap &copy; CartoDB",
-        name="🌙 Night / Dark Mode",
-        max_zoom=19,
-    ).add_to(map_obj)
-
     # Reference Overlays (can be checked on top of ANY active base layer)
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",

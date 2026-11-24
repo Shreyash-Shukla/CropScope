@@ -11,7 +11,7 @@ class MapLayersTests(unittest.TestCase):
         add_map_layers(m)
 
         tile_layers = [child for child in m._children.values() if isinstance(child, folium.TileLayer)]
-        self.assertGreaterEqual(len(tile_layers), 7, "Should register multiple base and overlay tile layers")
+        self.assertEqual(len(tile_layers), 6, "Should register exactly 4 base and 2 overlay tile layers")
 
         layer_names = [tl.tile_name for tl in tile_layers]
 
@@ -28,18 +28,18 @@ class MapLayersTests(unittest.TestCase):
         # 4. Pure optical satellite imagery
         self.assertIn("🛰️ Satellite View (Pure Optical, Sub-Meter)", layer_names)
 
-        # 5. CartoDB Voyager colored & labeled basemap
-        self.assertIn("🎨 CartoDB Voyager (Colored & Labeled)", layer_names)
-
-        # 6. Light & Dark mode
-        self.assertIn("☀️ Day / Light Mode", layer_names)
-        self.assertIn("🌙 Night / Dark Mode", layer_names)
-
-        # 7. Check overlays
+        # 5. Overlays (toggleable checkboxes)
         overlay_layers = [tl for tl in tile_layers if tl.overlay]
         overlay_names = [tl.tile_name for tl in overlay_layers]
+        self.assertEqual(len(overlay_layers), 2)
         self.assertIn("🏷️ Village & Place Names Overlay", overlay_names)
         self.assertIn("🛣️ Roads & Highways Overlay", overlay_names)
+
+        # 6. Ensure no CartoDB / API-key-required watermarked layers are present
+        for name in layer_names:
+            self.assertNotIn("CartoDB", name)
+            self.assertNotIn("Day / Light", name)
+            self.assertNotIn("Night / Dark", name)
 
         # 8. LayerControl present
         layer_controls = [child for child in m._children.values() if isinstance(child, folium.LayerControl)]
