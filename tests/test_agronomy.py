@@ -165,6 +165,48 @@ class AgronomyTests(unittest.TestCase):
         weather_empty = WeatherResult(SAMPLE_AREA, (), "UTC", date(2026, 11, 1), "http://test")
         self.assertEqual(generate_weather_alerts(weather_empty), ())
 
+    def test_wind_frost_humidity_and_gdd_enhancements(self):
+        # Wind & frost suitability checks
+        suit_wind_rest, _ = evaluate_fieldwork_suitability(
+            ForecastDay(date(2026, 11, 1), 0.0, 24.0, 3.0, min_temp_c=8.0, wind_speed_max_kmh=27.0)
+        )
+        self.assertEqual(suit_wind_rest, "Restricted: Wind")
+
+        suit_frost, _ = evaluate_fieldwork_suitability(
+            ForecastDay(date(2026, 11, 1), 0.0, 18.0, 2.0, min_temp_c=1.5, wind_speed_max_kmh=8.0)
+        )
+        self.assertEqual(suit_frost, "Caution: Frost")
+
+        suit_wind_caut, _ = evaluate_fieldwork_suitability(
+            ForecastDay(date(2026, 11, 1), 0.0, 24.0, 3.0, min_temp_c=10.0, wind_speed_max_kmh=18.0)
+        )
+        self.assertEqual(suit_wind_caut, "Caution: Wind")
+
+        # 7-day summary with GDD, wind, min temp, humidity & spray exclusion for wind
+        days = (
+            ForecastDay(date(2026, 11, 1), 0.0, 26.0, 3.0, min_temp_c=14.0, wind_speed_max_kmh=10.0, humidity_mean_pct=84.0),
+            ForecastDay(date(2026, 11, 2), 0.0, 26.0, 3.0, min_temp_c=1.0, wind_speed_max_kmh=26.0, humidity_mean_pct=82.0),
+            ForecastDay(date(2026, 11, 3), 0.0, 24.0, 3.0, min_temp_c=12.0, wind_speed_max_kmh=12.0, humidity_mean_pct=85.0),
+            ForecastDay(date(2026, 11, 4), 0.0, 24.0, 3.0, min_temp_c=12.0, wind_speed_max_kmh=11.0, humidity_mean_pct=70.0),
+        )
+        weather = WeatherResult(SAMPLE_AREA, days, "UTC", date(2026, 11, 1), "http://test")
+        summary = compute_agro_climatic_summary(weather)
+        self.assertEqual(summary.min_temp_c, 1.0)
+        self.assertEqual(summary.max_wind_kmh, 26.0)
+        self.assertAlmostEqual(summary.avg_humidity_pct, 80.2, places=1)
+        # Day1 GDD=(26+14)/2-10=10, Day2=(26+1)/2-10=3.5, Day3=8, Day4=8 => 29.5
+        self.assertAlmostEqual(summary.total_gdd_base10, 29.5, places=1)
+
+        windows = evaluate_operational_windows(weather)
+        # Day 2 excluded due to wind 26 km/h
+        self.assertEqual(len(windows.spraying_favorable_days), 3)
+
+        alerts = generate_weather_alerts(weather)
+        categories = {a.category for a in alerts}
+        self.assertIn("Frost", categories)
+        self.assertIn("Wind", categories)
+        self.assertIn("Humidity", categories)
+
 
 if __name__ == "__main__":
     unittest.main()

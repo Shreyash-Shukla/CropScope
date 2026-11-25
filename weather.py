@@ -15,7 +15,17 @@ DAILY_FIELDS = (
     "rain_sum",
     "temperature_2m_max",
     "et0_fao_evapotranspiration",
+    "temperature_2m_min",
+    "wind_speed_10m_max",
+    "precipitation_probability_max",
+    "relative_humidity_2m_mean",
 )
+OPTIONAL_UNIT_SPECS = {
+    "temperature_2m_min": ("min temperature", "°C", None, None),
+    "wind_speed_10m_max": ("wind speed", "km/h", 0.0, None),
+    "precipitation_probability_max": ("rain probability", "%", 0.0, 100.0),
+    "relative_humidity_2m_mean": ("relative humidity", "%", 0.0, 100.0),
+}
 
 
 class WeatherError(Exception):
@@ -29,6 +39,30 @@ def _number(value: object, name: str) -> float:
     if not math.isfinite(number):
         raise WeatherError(f"The forecast has a non-finite {name} value.")
     return number
+
+
+def _optional_series(daily: dict, units: dict, key: str) -> list[float | None] | None:
+    """Validate an optional seven-day microclimate series when included in payload."""
+    if key not in daily or daily.get(key) is None:
+        return None
+    label, expected_unit, min_val, max_val = OPTIONAL_UNIT_SPECS[key]
+    if units.get(key) != expected_unit:
+        raise WeatherError(f"The weather service returned unexpected units for {label}.")
+    values = daily[key]
+    if not isinstance(values, list) or len(values) != 7:
+        raise WeatherError(f"The weather service did not return seven days of {label}.")
+    parsed: list[float | None] = []
+    for raw in values:
+        if raw is None:
+            parsed.append(None)
+            continue
+        val = _number(raw, label)
+        if min_val is not None and val < min_val:
+            raise WeatherError(f"The forecast contains an out-of-range {label} value.")
+        if max_val is not None and val > max_val:
+            raise WeatherError(f"The forecast contains an out-of-range {label} value.")
+        parsed.append(val)
+    return parsed
 
 
 def parse_weather(
@@ -65,6 +99,11 @@ def parse_weather(
     if any(units.get(key) != unit for key, unit in expected_units.items()):
         raise WeatherError("The weather service returned unexpected measurement units.")
 
+    min_temps = _optional_series(daily, units, "temperature_2m_min")
+    wind_speeds = _optional_series(daily, units, "wind_speed_10m_max")
+    rain_probs = _optional_series(daily, units, "precipitation_probability_max")
+    humidities = _optional_series(daily, units, "relative_humidity_2m_mean")
+
     try:
         rows = tuple(
             ForecastDay(
@@ -72,6 +111,10 @@ def parse_weather(
                 rain_mm=_number(rain[index], "rain"),
                 max_temp_c=_number(temperatures[index], "temperature"),
                 et0_mm=_number(et0[index], "ET₀"),
+                min_temp_c=min_temps[index] if min_temps else None,
+                wind_speed_max_kmh=wind_speeds[index] if wind_speeds else None,
+                rain_probability_pct=rain_probs[index] if rain_probs else None,
+                humidity_mean_pct=humidities[index] if humidities else None,
             )
             for index in range(7)
         )

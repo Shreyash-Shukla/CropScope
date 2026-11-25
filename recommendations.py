@@ -63,6 +63,32 @@ def build_candidates(
                 "Check soil moisture before making any irrigation decision; this forecast is not a soil measurement.",
                 ("rain_total", "et0_total"), 30,
             ))
+        windy_days = [day for day in weather.days if day.wind_speed_max_kmh is not None]
+        if windy_days:
+            windiest = max(windy_days, key=lambda day: day.wind_speed_max_kmh)  # type: ignore[arg-type]
+            if windiest.wind_speed_max_kmh is not None and windiest.wind_speed_max_kmh >= 15.0:
+                evidence.append(Evidence(
+                    "wind_peak",
+                    f"Highest forecast wind speed: {windiest.wind_speed_max_kmh:.1f} km/h on {windiest.day}.",
+                ))
+                candidates.append(Candidate(
+                    "hold_windy_spray", "Time spraying for calm hours",
+                    "Avoid spraying during windy periods above 15 km/h to prevent drift; confirm local wind on site before mixing.",
+                    ("wind_peak",), 25,
+                ))
+        cold_days = [day for day in weather.days if day.min_temp_c is not None]
+        if cold_days:
+            coldest = min(cold_days, key=lambda day: day.min_temp_c)  # type: ignore[arg-type]
+            if coldest.min_temp_c is not None and coldest.min_temp_c <= 4.0:
+                evidence.append(Evidence(
+                    "cold_low",
+                    f"Lowest forecast minimum temperature: {coldest.min_temp_c:.1f} °C on {coldest.day}.",
+                ))
+                candidates.append(Candidate(
+                    "protect_frost", "Check frost risk for tender crops",
+                    "Inspect sensitive seedlings or flowering plots before cold nights and confirm field temperature on site.",
+                    ("cold_low",), 15,
+                ))
         candidates.append(Candidate(
             "review_forecast", "Review the forecast before field work",
             "Use the dated forecast to plan a field visit and recheck it as conditions change.",

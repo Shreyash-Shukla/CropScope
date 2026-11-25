@@ -90,6 +90,39 @@ class AnalysisTests(unittest.TestCase):
         self.assertIsNone(outcome.satellite.result)
         fetch.assert_not_called()
 
+    def test_weather_cache_roundtrip_preserves_microclimate_and_triggers_wind_frost_checks(self):
+        days = tuple(
+            ForecastDay(
+                date(2026, 10, 30) + timedelta(days=i),
+                0.0,
+                22.0,
+                3.0,
+                min_temp_c=2.0,
+                wind_speed_max_kmh=21.0,
+                rain_probability_pct=15.0,
+                humidity_mean_pct=65.0,
+            )
+            for i in range(7)
+        )
+        rich_weather = WeatherResult(SAMPLE_AREA, days, "Asia/Kolkata", NOW, "https://example.test/weather")
+        self.cache.save_weather(rich_weather)
+        loaded = self.cache.load_weather(SAMPLE_AREA)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.days[0].min_temp_c, 2.0)
+        self.assertEqual(loaded.days[0].wind_speed_max_kmh, 21.0)
+        self.assertEqual(loaded.days[0].rain_probability_pct, 15.0)
+        self.assertEqual(loaded.days[0].humidity_mean_pct, 65.0)
+
+        outcome = analyze(
+            self.request,
+            self.cache,
+            cached_only=True,
+            ai_ranker=self.no_ai,
+        )
+        rec_ids = {s.candidate.id for s in outcome.suggestions}
+        self.assertIn("protect_frost", rec_ids)
+        self.assertIn("hold_windy_spray", rec_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

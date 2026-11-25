@@ -31,7 +31,16 @@ def record_scan_outcome(
         et0_7d = sum(d.et0_mm for d in weather_res.days) if weather_res else 0.0
         net_water = rain_7d - et0_7d
         water_status = "Surplus" if net_water > 0 else ("Deficit" if net_water < 0 else "Balanced")
-        safe_spray = all(d.rain_mm < 2.0 for d in weather_res.days[:2]) if weather_res else True
+        safe_spray = (
+            all(
+                d.rain_mm < 2.0
+                and d.max_temp_c < 32.0
+                and (d.wind_speed_max_kmh is None or d.wind_speed_max_kmh < 15.0)
+                for d in weather_res.days[:2]
+            )
+            if weather_res
+            else True
+        )
 
         wt_payload = None
         if weather_res:
@@ -40,7 +49,16 @@ def record_scan_outcome(
                 "fetched_at_utc": weather_res.fetched_at_utc.isoformat(),
                 "source_url": weather_res.source_url,
                 "daily_forecast": [
-                    {"day": d.day.isoformat(), "rain_mm": d.rain_mm, "max_temp_c": d.max_temp_c, "et0_mm": d.et0_mm}
+                    {
+                        "day": d.day.isoformat(),
+                        "rain_mm": d.rain_mm,
+                        "max_temp_c": d.max_temp_c,
+                        "et0_mm": d.et0_mm,
+                        "min_temp_c": d.min_temp_c,
+                        "wind_speed_max_kmh": d.wind_speed_max_kmh,
+                        "rain_probability_pct": d.rain_probability_pct,
+                        "humidity_mean_pct": d.humidity_mean_pct,
+                    }
                     for d in weather_res.days
                 ],
             }

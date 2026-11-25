@@ -162,6 +162,47 @@ class AppUITests(unittest.TestCase):
         at.toggle(key="toggle_farmer_account").set_value(False).run()
         self.assertFalse(at.exception)
 
+    def test_rich_microclimate_forecast_metrics_render(self):
+        from datetime import date, datetime, timedelta, timezone
+        from analysis import AnalysisOutcome, SourceState
+        from location import SAMPLE_AREA
+        from models import AnalysisRequest, ForecastDay, WeatherResult
+
+        now = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
+        days = tuple(
+            ForecastDay(
+                date(2026, 11, 1) + timedelta(days=i),
+                0.0,
+                25.0 + i,
+                3.0,
+                min_temp_c=6.0 + i,
+                wind_speed_max_kmh=18.0,
+                rain_probability_pct=15.0,
+                humidity_mean_pct=78.0,
+            )
+            for i in range(7)
+        )
+        req = AnalysisRequest(SAMPLE_AREA, "Wheat", "Vegetative")
+        outcome = AnalysisOutcome(
+            req,
+            SourceState(WeatherResult(SAMPLE_AREA, days, "Asia/Kolkata", now, "https://example.test"), False, None),
+            SourceState(None, False, "No scene"),
+            (),
+            None,
+        )
+        at = AppTest.from_file(APP_PATH, default_timeout=20)
+        at.run()
+        at.radio[0].set_value("Use sample preset")
+        at.session_state["analysis_request"] = req
+        at.session_state["analysis_outcome"] = outcome
+        at.run()
+        self.assertFalse(at.exception)
+        metric_labels = {m.label for m in at.metric}
+        self.assertIn("Lowest min temp", metric_labels)
+        self.assertIn("Peak wind speed", metric_labels)
+        self.assertIn("Mean humidity", metric_labels)
+        self.assertIn("7-Day GDD (Base 10°C)", metric_labels)
+
 
 if __name__ == "__main__":
     unittest.main()

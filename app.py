@@ -988,8 +988,11 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         "Favorable": "[FAVORABLE]",
         "Caution: Wet": "[CAUTION: WET]",
         "Caution: Heat": "[CAUTION: HEAT]",
+        "Caution: Wind": "[CAUTION: WIND]",
+        "Caution: Frost": "[CAUTION: FROST]",
         "Restricted: Rain": "[RESTRICTED: RAIN]",
         "Restricted: Heat": "[RESTRICTED: HEAT]",
+        "Restricted: Wind": "[RESTRICTED: WIND]",
     }
 
     hdr_col, unit_col = st.columns([3, 1], vertical_alignment="center")
@@ -1021,21 +1024,37 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
 
     temp_unit = "°F" if is_imperial else "°C"
     len_unit = "in" if is_imperial else "mm"
+    wind_unit = "mph" if is_imperial else "km/h"
     to_temp = lambda c: round(c * 9 / 5 + 32, 1) if is_imperial else round(c, 1)
     to_len = lambda mm: round(mm / 25.4, 2) if is_imperial else round(mm, 1)
+    to_wind = lambda kmh: round(kmh * 0.621371, 1) if is_imperial else round(kmh, 1)
 
-    rows = [
-        {
+    has_min_temp = any(row.min_temp_c is not None for row in summary.days)
+    has_wind = any(row.wind_speed_max_kmh is not None for row in summary.days)
+    has_rain_prob = any(row.rain_probability_pct is not None for row in summary.days)
+    has_humidity = any(row.humidity_mean_pct is not None for row in summary.days)
+
+    rows = []
+    for row in summary.days:
+        rec = {
             "Date": row.day.isoformat(),
             f"Rain ({len_unit})": to_len(row.rain_mm),
             f"Max temp ({temp_unit})": to_temp(row.max_temp_c),
-            f"Ref ET₀ ({len_unit})": to_len(row.et0_mm),
-            f"Net P − ET₀ ({len_unit})": to_len(row.net_balance_mm),
-            "Fieldwork window": suitability_icons.get(row.suitability, row.suitability),
-            "Advisory note": row.reason,
         }
-        for row in summary.days
-    ]
+        if has_min_temp:
+            rec[f"Min temp ({temp_unit})"] = to_temp(row.min_temp_c) if row.min_temp_c is not None else None
+        if has_wind:
+            rec[f"Wind ({wind_unit})"] = to_wind(row.wind_speed_max_kmh) if row.wind_speed_max_kmh is not None else None
+        if has_rain_prob:
+            rec["Rain prob (%)"] = round(row.rain_probability_pct) if row.rain_probability_pct is not None else None
+        if has_humidity:
+            rec["Humidity (%)"] = round(row.humidity_mean_pct) if row.humidity_mean_pct is not None else None
+        rec[f"Ref ET₀ ({len_unit})"] = to_len(row.et0_mm)
+        rec[f"Net P − ET₀ ({len_unit})"] = to_len(row.net_balance_mm)
+        rec["Fieldwork window"] = suitability_icons.get(row.suitability, row.suitability)
+        rec["Advisory note"] = row.reason
+        rows.append(rec)
+
     frame = pd.DataFrame(rows)
     latitude, longitude = result.area.center
 
@@ -1069,6 +1088,29 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         help=f"Cumulative precipitation minus reference ET₀: {summary.status_label}. Atmospheric indicator of drying vs wetting trend.",
     )
 
+    if any(v is not None for v in (summary.min_temp_c, summary.max_wind_kmh, summary.avg_humidity_pct, summary.total_gdd_base10)):
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric(
+            "Lowest min temp",
+            f"{to_temp(summary.min_temp_c)} {temp_unit}" if summary.min_temp_c is not None else "—",
+            help="Lowest forecast overnight temperature; watch ≤ 2 °C (35.6 °F) for frost risk.",
+        )
+        m2.metric(
+            "Peak wind speed",
+            f"{to_wind(summary.max_wind_kmh)} {wind_unit}" if summary.max_wind_kmh is not None else "—",
+            help="Peak 10m wind speed; spray drift risk rises above 15 km/h (9.3 mph).",
+        )
+        m3.metric(
+            "Mean humidity",
+            f"{summary.avg_humidity_pct:.0f}%" if summary.avg_humidity_pct is not None else "—",
+            help="7-day average relative humidity; prolonged ≥80% humidity elevates foliar disease pressure.",
+        )
+        m4.metric(
+            "7-Day GDD (Base 10°C)",
+            f"{summary.total_gdd_base10:.1f} °C·d" if summary.total_gdd_base10 is not None else "—",
+            help="Accumulated Growing Degree Days (base 10°C) measuring thermal heat units for crop growth.",
+        )
+
     st.dataframe(frame, hide_index=True, width="stretch")
     left, right = st.columns(2)
     with left:
@@ -1080,14 +1122,17 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         })
         st.bar_chart(water_df, x="Date", y=[f"Rain ({len_unit})", f"Reference ET₀ ({len_unit})"], height=260)
     with right:
-        st.markdown(f"**Daily maximum temperature ({temp_unit})**")
-        st.line_chart(frame, x="Date", y=f"Max temp ({temp_unit})", y_label=temp_unit, height=260)
+        temp_cols = [f"Max temp ({temp_unit})"]
+        if has_min_temp:
+            temp_cols.append(f"Min temp ({temp_unit})")
+        st.markdown(f"**Daily temperature range ({temp_unit})**")
+        st.line_chart(frame, x="Date", y=temp_cols, y_label=temp_unit, height=260)
 
     windows = evaluate_operational_windows(result)
     with st.expander("🚜 Field Operations Planner (7-day operational windows)", expanded=False):
         op1, op2, op3 = st.columns(3)
         op1.metric("🚜 Machinery Access", f"{len(windows.machinery_accessible_days)} / 7 days", help="Low soil saturation risk; minimal chance of field rutting.")
-        op2.metric("🚿 Spraying Window", f"{len(windows.spraying_favorable_days)} / 7 days", help="Low droplet volatilization (<32°C) and minimal rain wash-off (<2mm).")
+        op2.metric("🚿 Spraying Window", f"{len(windows.spraying_favorable_days)} / 7 days", help="Low droplet volatilization (<32°C), low wind drift (<15 km/h), and minimal rain wash-off (<2mm).")
         op3.metric("🔍 Ground Scouting", f"{len(windows.scouting_recommended_days)} / 7 days", help="Favorable conditions for crop walks and visual inspection.")
         st.divider()
         format_days = lambda days: ", ".join(d.strftime("%a %d %b") for d in days) if days else "No favorable window forecast this week"

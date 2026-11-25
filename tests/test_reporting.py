@@ -107,6 +107,40 @@ class ReportingTests(unittest.TestCase):
         self.assertNotIn(")", base_special)
         self.assertNotIn("#", base_special)
 
+    def test_reports_include_microclimate_when_present(self):
+        days = tuple(
+            ForecastDay(
+                date(2026, 11, 1) + timedelta(days=i),
+                0.0,
+                26.0,
+                3.0,
+                min_temp_c=8.0 + i,
+                wind_speed_max_kmh=18.5,
+                rain_probability_pct=20.0,
+                humidity_mean_pct=75.0,
+            )
+            for i in range(7)
+        )
+        weather_res = WeatherResult(SAMPLE_AREA, days, "Asia/Kolkata", NOW, "https://example.test/weather")
+        base = sample_outcome(weather_ok=True, satellite_ok=False)
+        outcome = AnalysisOutcome(
+            base.request,
+            SourceState(weather_res, False, None),
+            base.satellite,
+            base.suggestions,
+            base.suggestion_source,
+        )
+        md = generate_advisory_markdown(outcome, generated_at=NOW)
+        self.assertIn("Min Temp (°C)", md)
+        self.assertIn("Wind (km/h)", md)
+        self.assertIn("GDD Base 10°C", md)
+
+        data = json.loads(generate_advisory_json(outcome, generated_at=NOW))
+        self.assertEqual(data["weather"]["max_wind_kmh"], 18.5)
+        self.assertEqual(data["weather"]["min_temp_c"], 8.0)
+        self.assertIsNotNone(data["weather"]["total_gdd_base10"])
+        self.assertEqual(data["weather"]["days"][0]["wind_speed_max_kmh"], 18.5)
+
 
 if __name__ == "__main__":
     unittest.main()

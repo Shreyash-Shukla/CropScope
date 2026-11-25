@@ -67,7 +67,44 @@ class WeatherTests(unittest.TestCase):
         self.assertAlmostEqual(float(query["latitude"][0]), self.area.center[0])
         self.assertAlmostEqual(float(query["longitude"][0]), self.area.center[1])
         self.assertIn("rain_sum", query["daily"][0])
+        self.assertIn("temperature_2m_min", query["daily"][0])
+        self.assertIn("wind_speed_10m_max", query["daily"][0])
+        self.assertIn("precipitation_probability_max", query["daily"][0])
+        self.assertIn("relative_humidity_2m_mean", query["daily"][0])
         self.assertEqual(len(result.days), 7)
+
+    def test_optional_microclimate_fields_parsed_and_validated(self):
+        payload = forecast_payload()
+        payload["daily_units"].update({
+            "temperature_2m_min": "°C",
+            "wind_speed_10m_max": "km/h",
+            "precipitation_probability_max": "%",
+            "relative_humidity_2m_mean": "%",
+        })
+        payload["daily"].update({
+            "temperature_2m_min": [4.0, 5.0, 3.0, 1.5, 4.5, 6.0, 5.5],
+            "wind_speed_10m_max": [8.5, 16.0, 12.0, 26.5, 9.0, 11.0, 7.5],
+            "precipitation_probability_max": [10, 20, 65, 15, None, 30, 5],
+            "relative_humidity_2m_mean": [72, 78, 86, 82, 68, 74, 70],
+        })
+        result = parse_weather(payload, self.area, "https://example.test", self.now)
+        self.assertEqual(result.days[3].min_temp_c, 1.5)
+        self.assertEqual(result.days[3].wind_speed_max_kmh, 26.5)
+        self.assertEqual(result.days[2].rain_probability_pct, 65.0)
+        self.assertIsNone(result.days[4].rain_probability_pct)
+        self.assertEqual(result.days[2].humidity_mean_pct, 86.0)
+
+        bad_wind = forecast_payload()
+        bad_wind["daily_units"]["wind_speed_10m_max"] = "km/h"
+        bad_wind["daily"]["wind_speed_10m_max"] = [-1.0, 5, 5, 5, 5, 5, 5]
+        with self.assertRaises(WeatherError):
+            parse_weather(bad_wind, self.area, "https://example.test", self.now)
+
+        bad_prob = forecast_payload()
+        bad_prob["daily_units"]["precipitation_probability_max"] = "%"
+        bad_prob["daily"]["precipitation_probability_max"] = [10, 20, 120, 10, 10, 10, 10]
+        with self.assertRaises(WeatherError):
+            parse_weather(bad_prob, self.area, "https://example.test", self.now)
 
 
 if __name__ == "__main__":

@@ -67,6 +67,10 @@ def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
         "peak_rain_mm": 0.0,
         "spraying_favorable_days_count": 0,
         "machinery_accessible_days_count": 0,
+        "min_temp_7d_c": None,
+        "max_wind_7d_kmh": None,
+        "avg_humidity_7d_pct": None,
+        "total_gdd_base10": None,
         "mean_ndvi": None,
         "mean_savi": None,
         "cloud_cover_pct": None,
@@ -89,14 +93,20 @@ def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
         stats["water_balance_status"] = summary.status_label
         stats["spraying_favorable_days_count"] = len(windows.spraying_favorable_days)
         stats["machinery_accessible_days_count"] = len(windows.machinery_accessible_days)
+        stats["min_temp_7d_c"] = summary.min_temp_c
+        stats["max_wind_7d_kmh"] = summary.max_wind_kmh
+        stats["avg_humidity_7d_pct"] = summary.avg_humidity_pct
+        stats["total_gdd_base10"] = summary.total_gdd_base10
 
-        # 48h rain outlook (first 2 forecast days)
+        # 48h rain & wind outlook (first 2 forecast days)
         first_48h_days = weather_res.days[:2]
         rain_48h = sum(d.rain_mm for d in first_48h_days)
         stats["imminent_rain_48h_mm"] = round(rain_48h, 2)
-        # Unsafe to spray if imminent rain >= 2.0 mm or max temp >= 35°C
+        # Unsafe to spray if imminent rain >= 2.0 mm, max temp >= 35°C, or wind >= 15 km/h
         stats["safe_to_spray_next_48h"] = (
-            rain_48h < 2.0 and all(d.max_temp_c < 35.0 for d in first_48h_days)
+            rain_48h < 2.0
+            and all(d.max_temp_c < 35.0 for d in first_48h_days)
+            and all(d.wind_speed_max_kmh is None or d.wind_speed_max_kmh < 15.0 for d in first_48h_days)
         )
 
         peak_day = max(weather_res.days, key=lambda d: d.rain_mm)
@@ -159,15 +169,53 @@ def build_farmer_dossier(outcome: AnalysisOutcome, lang: str = "en") -> str:
             f"- Favorable Fieldwork Days: {summary.favorable_days_count} of {len(summary.days)} days",
             f"- Spraying Suitable Dates: {', '.join(str(d) for d in windows.spraying_favorable_days) if windows.spraying_favorable_days else 'None in 7-day forecast'}",
             f"- Machinery Accessible Dates: {', '.join(str(d) for d in windows.machinery_accessible_days) if windows.machinery_accessible_days else 'None'}",
+        ])
+        if summary.min_temp_c is not None:
+            lines.append(f"- 7-Day Lowest Min Temperature: {summary.min_temp_c:.1f}°C")
+        if summary.max_wind_kmh is not None:
+            lines.append(f"- 7-Day Peak Wind Speed: {summary.max_wind_kmh:.1f} km/h")
+        if summary.avg_humidity_pct is not None:
+            lines.append(f"- 7-Day Mean Relative Humidity: {summary.avg_humidity_pct:.1f}%")
+        if summary.total_gdd_base10 is not None:
+            lines.append(f"- 7-Day Growing Degree Days (Base 10°C): {summary.total_gdd_base10:.1f} °C·d")
+        has_min = any(d.min_temp_c is not None for d in summary.days)
+        has_wind = any(d.wind_speed_max_kmh is not None for d in summary.days)
+        has_prob = any(d.rain_probability_pct is not None for d in summary.days)
+        has_hum = any(d.humidity_mean_pct is not None for d in summary.days)
+        hdr = ["Date", "Max Temp (°C)"]
+        sep = [":---", ":---:"]
+        if has_min:
+            hdr.append("Min Temp (°C)")
+            sep.append(":---:")
+        if has_wind:
+            hdr.append("Wind (km/h)")
+            sep.append(":---:")
+        if has_prob:
+            hdr.append("Rain Prob (%)")
+            sep.append(":---:")
+        if has_hum:
+            hdr.append("Humidity (%)")
+            sep.append(":---:")
+        hdr.extend(["Rain (mm)", "ET₀ (mm)", "Net Balance (mm)", "Field Suitability", "Reason"])
+        sep.extend([":---:", ":---:", ":---:", ":---:", ":---"])
+        lines.extend([
             "",
             "### Daily Meteorological Breakdown:",
-            "| Date | Max Temp (°C) | Rain (mm) | ET₀ (mm) | Net Balance (mm) | Field Suitability | Reason |",
-            "| :--- | :---: | :---: | :---: | :---: | :---: | :--- |",
+            "| " + " | ".join(hdr) + " |",
+            "| " + " | ".join(sep) + " |",
         ])
         for d in summary.days:
-            lines.append(
-                f"| {d.day} | {d.max_temp_c:.1f}°C | {d.rain_mm:.1f} mm | {d.et0_mm:.1f} mm | {d.net_balance_mm:+.1f} mm | {d.suitability} | {d.reason} |"
-            )
+            row_cells = [str(d.day), f"{d.max_temp_c:.1f}°C"]
+            if has_min:
+                row_cells.append(f"{d.min_temp_c:.1f}°C" if d.min_temp_c is not None else "—")
+            if has_wind:
+                row_cells.append(f"{d.wind_speed_max_kmh:.1f}" if d.wind_speed_max_kmh is not None else "—")
+            if has_prob:
+                row_cells.append(f"{d.rain_probability_pct:.0f}%" if d.rain_probability_pct is not None else "—")
+            if has_hum:
+                row_cells.append(f"{d.humidity_mean_pct:.0f}%" if d.humidity_mean_pct is not None else "—")
+            row_cells.extend([f"{d.rain_mm:.1f} mm", f"{d.et0_mm:.1f} mm", f"{d.net_balance_mm:+.1f} mm", d.suitability, d.reason])
+            lines.append("| " + " | ".join(row_cells) + " |")
 
         if alerts:
             lines.append("")
@@ -444,6 +492,8 @@ def generate_fallback_response(
     peak_day = stats.get("peak_rain_day") or "upcoming days"
     peak_mm = stats.get("peak_rain_mm", 0.0)
     safe_spray = stats.get("safe_to_spray_next_48h", True)
+    max_wind = stats.get("max_wind_7d_kmh")
+    min_temp = stats.get("min_temp_7d_c")
     ndvi = stats.get("mean_ndvi")
     net_bal = stats.get("net_water_balance_mm", 0.0)
 
@@ -502,27 +552,30 @@ def generate_fallback_response(
                     f"⚠️ *Safety:* Verify official chemical dosages on the product label or with your local agriculture extension officer."
                 )
         else:
+            wind_note_hi = f" (तेज हवा {max_wind:.1f} किमी/घंटा भी अनुमानित है)" if (max_wind is not None and max_wind >= 15.0) else ""
+            wind_note_pa = f" (ਤੇਜ਼ ਹਵਾ {max_wind:.1f} ਕਿਮੀ/ਘੰਟਾ ਦੀ ਵੀ ਸੰਭਾਵਨਾ ਹੈ)" if (max_wind is not None and max_wind >= 15.0) else ""
+            wind_note_en = f", wind up to {max_wind:.1f} km/h," if (max_wind is not None and max_wind >= 15.0) else ""
             if lang == "hi":
                 return (
                     f"🚜 **छिड़काव (Spray) चेतावनी:**\n\n"
-                    f"⚠️ **सावधानी: अगले 48 घंटों में कीटनाशक या खाद का छिड़काव न करें!**\n"
-                    f"- अगले 48 घंटों में **{rain_48h:.1f} मिमी** बारिश का अनुमान है।\n"
-                    f"- बारिश से छिड़की गई दवा बह जाएगी (wash-off), जिससे फसल को लाभ नहीं मिलेगा और पैसे का नुकसान होगा।\n"
-                    f"- बारिश रुकने और खेत सूखने के बाद ही छिड़काव की योजना बनाएं।"
+                    f"⚠️ **सावधानी: अगले 48 घंटों में कीटनाशक या खाद का छिड़काव टालें!**\n"
+                    f"- अगले 48 घंटों में **{rain_48h:.1f} मिमी** बारिश{wind_note_hi} का अनुमान है।\n"
+                    f"- बारिश या तेज हवा से छिड़की गई दवा बह/उड़ जाएगी, जिससे फसल को लाभ नहीं मिलेगा और पैसे का नुकसान होगा।\n"
+                    f"- शांत और सूखे मौसम में ही छिड़काव की योजना बनाएं।"
                 )
             elif lang == "pa":
                 return (
                     f"🚜 **ਸਪਰੇਅ ਚੇਤਾਵਨੀ:**\n\n"
                     f"⚠️ **ਸਾਵਧਾਨੀ: ਅਗਲੇ 48 ਘੰਟਿਆਂ 'ਚ ਸਪਰੇਅ ਨਾ ਕਰੋ!**\n"
-                    f"- ਆਉਣ ਵਾਲੇ 48 ਘੰਟਿਆਂ 'ਚ **{rain_48h:.1f} ਮਿਮੀ** ਮੀਂਹ ਪੈ ਸਕਦਾ ਹੈ।\n"
-                    f"- ਮੀਂਹ ਕਾਰਨ ਦਵਾਈ ਧੁਲ ਜਾਵੇਗੀ ਅਤੇ ਖਰਚਾ ਵਿਅਰਥ ਜਾਵੇਗਾ। ਮੀਂਹ ਰੁਕਣ ਮਗਰੋਂ ਸਪਰੇਅ ਕਰੋ।"
+                    f"- ਆਉਣ ਵਾਲੇ 48 ਘੰਟਿਆਂ 'ਚ **{rain_48h:.1f} ਮਿਮੀ** ਮੀਂਹ{wind_note_pa} ਪੈ ਸਕਦਾ ਹੈ।\n"
+                    f"- ਮੀਂਹ ਜਾਂ ਤੇਜ਼ ਹਵਾ ਕਾਰਨ ਦਵਾਈ ਦਾ ਅਸਰ ਘਟ ਜਾਵੇਗਾ ਅਤੇ ਖਰਚਾ ਵਿਅਰਥ ਜਾਵੇਗਾ।"
                 )
             else:
                 return (
                     f"🚜 **Spraying Warning for {crop}:**\n\n"
                     f"⚠️ **UNFAVORABLE: Hold chemical spraying for the next 48 hours.**\n"
-                    f"- Forecast rain ({rain_48h:.1f} mm) or high thermal stress poses a serious risk of foliar wash-off or droplet volatilization.\n"
-                    f"- Postpone application until the rain front clears and canopy surfaces are dry."
+                    f"- Forecast rain ({rain_48h:.1f} mm){wind_note_en} or high thermal stress poses a serious risk of foliar wash-off, drift, or droplet volatilization.\n"
+                    f"- Postpone application until calm, dry conditions return."
                 )
 
     # 3. Satellite / NDVI / Canopy health intent

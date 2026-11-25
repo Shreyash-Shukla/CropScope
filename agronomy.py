@@ -42,8 +42,13 @@ class WaterBalanceDay:
     max_temp_c: float
     et0_mm: float
     net_balance_mm: float  # rain - et0
-    suitability: str       # "Favorable", "Caution: Heat", "Caution: Wet", "Restricted: Rain", "Restricted: Heat"
+    suitability: str       # "Favorable", "Caution: Heat", "Caution: Wet", "Caution: Wind", "Caution: Frost", "Restricted: Rain", "Restricted: Heat", "Restricted: Wind"
     reason: str
+    min_temp_c: float | None = None
+    wind_speed_max_kmh: float | None = None
+    rain_probability_pct: float | None = None
+    humidity_mean_pct: float | None = None
+    gdd_base10: float | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,10 @@ class AgroClimaticSummary:
     status_label: str
     favorable_days_count: int
     days: tuple[WaterBalanceDay, ...]
+    total_gdd_base10: float | None = None
+    min_temp_c: float | None = None
+    max_wind_kmh: float | None = None
+    avg_humidity_pct: float | None = None
 
 
 def evaluate_fieldwork_suitability(day: ForecastDay) -> tuple[str, str]:
@@ -65,25 +74,45 @@ def evaluate_fieldwork_suitability(day: ForecastDay) -> tuple[str, str]:
         return "Restricted: Rain", f"Forecast rain ({day.rain_mm:.1f} mm) risks runoff, soil compaction, and machinery immobility."
     if day.max_temp_c >= 38.0:
         return "Restricted: Heat", f"Forecast high ({day.max_temp_c:.1f} °C) presents extreme thermal stress and rapid spray evaporation."
+    if day.wind_speed_max_kmh is not None and day.wind_speed_max_kmh >= 25.0:
+        return "Restricted: Wind", f"High wind ({day.wind_speed_max_kmh:.1f} km/h) causes severe spray drift and lodging risk."
+    if day.min_temp_c is not None and day.min_temp_c <= 2.0:
+        return "Caution: Frost", f"Near-freezing minimum ({day.min_temp_c:.1f} °C) threatens seedlings and sensitive flowering tissue."
     if day.rain_mm >= 2.0:
         return "Caution: Wet", f"Light to moderate rain ({day.rain_mm:.1f} mm) may wash off chemical applications or dampen access."
+    if day.wind_speed_max_kmh is not None and day.wind_speed_max_kmh >= 15.0:
+        return "Caution: Wind", f"Breezy wind ({day.wind_speed_max_kmh:.1f} km/h) increases foliar spray drift risk."
     if day.max_temp_c >= 32.0:
         return "Caution: Heat", f"Elevated temperature ({day.max_temp_c:.1f} °C) increases droplet volatilization and plant stress."
     return "Favorable", "Conditions forecast to be favorable for routine field inspection and operations."
 
 
 def compute_agro_climatic_summary(weather: WeatherResult) -> AgroClimaticSummary:
-    """Calculate 7-day cumulative water balance (P - ET0) and suitability."""
+    """Calculate 7-day cumulative water balance (P - ET0), microclimate stats, and suitability."""
     daily_records: list[WaterBalanceDay] = []
     total_rain = sum(day.rain_mm for day in weather.days)
     total_et0 = sum(day.et0_mm for day in weather.days)
     net_balance = total_rain - total_et0
 
     favorable_count = 0
+    gdd_values: list[float] = []
+    min_temps: list[float] = []
+    wind_speeds: list[float] = []
+    humidities: list[float] = []
+
     for day in weather.days:
         suitability, reason = evaluate_fieldwork_suitability(day)
         if suitability == "Favorable":
             favorable_count += 1
+        gdd = None
+        if day.min_temp_c is not None:
+            gdd = round(max(0.0, (day.max_temp_c + day.min_temp_c) / 2.0 - 10.0), 1)
+            gdd_values.append(gdd)
+            min_temps.append(day.min_temp_c)
+        if day.wind_speed_max_kmh is not None:
+            wind_speeds.append(day.wind_speed_max_kmh)
+        if day.humidity_mean_pct is not None:
+            humidities.append(day.humidity_mean_pct)
         daily_records.append(WaterBalanceDay(
             day=day.day,
             rain_mm=day.rain_mm,
@@ -92,6 +121,11 @@ def compute_agro_climatic_summary(weather: WeatherResult) -> AgroClimaticSummary
             net_balance_mm=round(day.rain_mm - day.et0_mm, 2),
             suitability=suitability,
             reason=reason,
+            min_temp_c=day.min_temp_c,
+            wind_speed_max_kmh=day.wind_speed_max_kmh,
+            rain_probability_pct=day.rain_probability_pct,
+            humidity_mean_pct=day.humidity_mean_pct,
+            gdd_base10=gdd,
         ))
 
     if net_balance <= -15.0:
@@ -108,6 +142,10 @@ def compute_agro_climatic_summary(weather: WeatherResult) -> AgroClimaticSummary
         status_label=status,
         favorable_days_count=favorable_count,
         days=tuple(daily_records),
+        total_gdd_base10=round(sum(gdd_values), 1) if gdd_values else None,
+        min_temp_c=round(min(min_temps), 1) if min_temps else None,
+        max_wind_kmh=round(max(wind_speeds), 1) if wind_speeds else None,
+        avg_humidity_pct=round(sum(humidities) / len(humidities), 1) if humidities else None,
     )
 
 
@@ -127,7 +165,8 @@ def evaluate_operational_windows(weather: WeatherResult) -> OperationalWindows:
     for day in weather.days:
         if day.rain_mm < 10.0:
             machinery.append(day.day)
-        if day.rain_mm < 2.0 and day.max_temp_c < 32.0:
+        wind_ok = day.wind_speed_max_kmh is None or day.wind_speed_max_kmh < 15.0
+        if day.rain_mm < 2.0 and day.max_temp_c < 32.0 and wind_ok:
             spraying.append(day.day)
         if day.rain_mm < 5.0 and day.max_temp_c < 36.0:
             scouting.append(day.day)
@@ -203,6 +242,53 @@ def generate_weather_alerts(weather: WeatherResult) -> tuple[WeatherAlert, ...]:
             level="warning",
             category="Heat",
             message=f"☀️ Elevated Temperature Warning: Peak {highest_heat.max_temp_c:.1f} °C on {highest_heat.day.strftime('%a, %d %b')}. High droplet volatilization risk.",
+        ))
+
+    # Frost / Cold-wave alerts
+    cold_days = [d for d in weather.days if d.min_temp_c is not None]
+    if cold_days:
+        coldest = min(cold_days, key=lambda d: d.min_temp_c)  # type: ignore[arg-type]
+        if coldest.min_temp_c is not None and coldest.min_temp_c <= 2.0:
+            alerts.append(WeatherAlert(
+                level="danger",
+                category="Frost",
+                message=f"❄️ Frost Hazard: Minimum temperature forecast at {coldest.min_temp_c:.1f} °C on {coldest.day.strftime('%a, %d %b')}. Protect sensitive seedlings and tender crops.",
+            ))
+        elif coldest.min_temp_c is not None and coldest.min_temp_c <= 5.0:
+            alerts.append(WeatherAlert(
+                level="warning",
+                category="Frost",
+                message=f"🌡️ Cold Night Advisory: Forecast low of {coldest.min_temp_c:.1f} °C on {coldest.day.strftime('%a, %d %b')}. Monitor cold-sensitive vegetables and young plants.",
+            ))
+
+    # Wind / Spray drift alerts
+    windy_days = [d for d in weather.days if d.wind_speed_max_kmh is not None]
+    if windy_days:
+        windiest = max(windy_days, key=lambda d: d.wind_speed_max_kmh)  # type: ignore[arg-type]
+        if windiest.wind_speed_max_kmh is not None and windiest.wind_speed_max_kmh >= 25.0:
+            alerts.append(WeatherAlert(
+                level="warning",
+                category="Wind",
+                message=f"💨 High Wind Alert: Winds up to {windiest.wind_speed_max_kmh:.1f} km/h on {windiest.day.strftime('%a, %d %b')}. Avoid spraying due to severe chemical drift risk.",
+            ))
+        elif windiest.wind_speed_max_kmh is not None and windiest.wind_speed_max_kmh >= 15.0:
+            alerts.append(WeatherAlert(
+                level="info",
+                category="Wind",
+                message=f"🌬️ Moderate Spray Drift Risk: Winds up to {windiest.wind_speed_max_kmh:.1f} km/h on {windiest.day.strftime('%a, %d %b')}. Prefer calm early-morning spray windows.",
+            ))
+
+    # Warm-humid fungal scouting alert
+    humid_warm_days = sum(
+        1
+        for d in weather.days
+        if d.humidity_mean_pct is not None and d.humidity_mean_pct >= 80.0 and d.max_temp_c >= 18.0
+    )
+    if humid_warm_days >= 3:
+        alerts.append(WeatherAlert(
+            level="info",
+            category="Humidity",
+            message=f"🍄 Humid Microclimate Watch: {humid_warm_days} days forecast with ≥80% mean humidity. Inspect lower canopy leaves for early fungal spots (scouting cue, not a diagnosis).",
         ))
 
     # Water balance trends

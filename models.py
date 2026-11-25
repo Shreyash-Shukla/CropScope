@@ -55,6 +55,10 @@ class ForecastDay:
     rain_mm: float
     max_temp_c: float
     et0_mm: float
+    min_temp_c: float | None = None
+    wind_speed_max_kmh: float | None = None
+    rain_probability_pct: float | None = None
+    humidity_mean_pct: float | None = None
 
 
 @dataclass(frozen=True)

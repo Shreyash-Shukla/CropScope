@@ -53,9 +53,19 @@ class CacheStore:
             "version": VERSION, "area": _area_dict(result.area),
             "fetched_at_utc": result.fetched_at_utc.isoformat(),
             "timezone": result.timezone, "source_url": result.source_url,
-            "days": [{"day": row.day.isoformat(), "rain_mm": row.rain_mm,
-                      "max_temp_c": row.max_temp_c, "et0_mm": row.et0_mm}
-                     for row in result.days],
+            "days": [
+                {
+                    "day": row.day.isoformat(),
+                    "rain_mm": row.rain_mm,
+                    "max_temp_c": row.max_temp_c,
+                    "et0_mm": row.et0_mm,
+                    "min_temp_c": row.min_temp_c,
+                    "wind_speed_max_kmh": row.wind_speed_max_kmh,
+                    "rain_probability_pct": row.rain_probability_pct,
+                    "humidity_mean_pct": row.humidity_mean_pct,
+                }
+                for row in result.days
+            ],
         })
 
     def load_weather(self, area: AnalysisArea) -> WeatherResult | None:
@@ -63,9 +73,20 @@ class CacheStore:
         if payload is None:
             return None
         try:
-            days = tuple(ForecastDay(date.fromisoformat(row["day"]),
-                                     float(row["rain_mm"]), float(row["max_temp_c"]),
-                                     float(row["et0_mm"])) for row in payload["days"])
+            opt_float = lambda val: float(val) if val is not None else None
+            days = tuple(
+                ForecastDay(
+                    date.fromisoformat(row["day"]),
+                    float(row["rain_mm"]),
+                    float(row["max_temp_c"]),
+                    float(row["et0_mm"]),
+                    min_temp_c=opt_float(row.get("min_temp_c")),
+                    wind_speed_max_kmh=opt_float(row.get("wind_speed_max_kmh")),
+                    rain_probability_pct=opt_float(row.get("rain_probability_pct")),
+                    humidity_mean_pct=opt_float(row.get("humidity_mean_pct")),
+                )
+                for row in payload["days"]
+            )
             if len(days) != 7:
                 return None
             return WeatherResult(area, days, payload["timezone"],

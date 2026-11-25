@@ -54,7 +54,14 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
             f"- **Net Atmospheric Water Balance (P − ET₀):** {summary.net_balance_mm:+.1f} mm ({summary.status_label})",
             f"- **Favorable Fieldwork Days:** {summary.favorable_days_count} of {len(summary.days)} days",
         ])
-        windows = evaluate_operational_windows(weather_res)
+        if summary.min_temp_c is not None:
+            lines.append(f"- **7-Day Lowest Min Temp:** {summary.min_temp_c:.1f} °C")
+        if summary.max_wind_kmh is not None:
+            lines.append(f"- **7-Day Peak Wind Speed:** {summary.max_wind_kmh:.1f} km/h")
+        if summary.avg_humidity_pct is not None:
+            lines.append(f"- **7-Day Mean Relative Humidity:** {summary.avg_humidity_pct:.1f}%")
+        if summary.total_gdd_base10 is not None:
+            lines.append(f"- **7-Day Growing Degree Days (GDD Base 10°C):** {summary.total_gdd_base10:.1f} °C·d")
         alerts = generate_weather_alerts(weather_res)
         lines.append(
             f"- **Field Operations Windows:** {len(windows.spraying_favorable_days)} spraying days, "
@@ -65,16 +72,43 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
             lines.append("- **Operational Weather Alerts:**")
             for alert in alerts:
                 lines.append(f"  - {alert.message}")
+        has_min = any(d.min_temp_c is not None for d in summary.days)
+        has_wind = any(d.wind_speed_max_kmh is not None for d in summary.days)
+        has_prob = any(d.rain_probability_pct is not None for d in summary.days)
+        has_hum = any(d.humidity_mean_pct is not None for d in summary.days)
+        header_cols = ["Date", "Rain (mm)", "Max Temp (°C)"]
+        align_cols = ["---", "---:", "---:"]
+        if has_min:
+            header_cols.append("Min Temp (°C)")
+            align_cols.append("---:")
+        if has_wind:
+            header_cols.append("Wind (km/h)")
+            align_cols.append("---:")
+        if has_prob:
+            header_cols.append("Rain Prob (%)")
+            align_cols.append("---:")
+        if has_hum:
+            header_cols.append("Humidity (%)")
+            align_cols.append("---:")
+        header_cols.extend(["Ref ET₀ (mm)", "Net (P − ET₀)", "Fieldwork Window", "Notes"])
+        align_cols.extend(["---:", "---:", "---", "---"])
         lines.extend([
             "",
-            "| Date | Rain (mm) | Max Temp (°C) | Ref ET₀ (mm) | Net (P − ET₀) | Fieldwork Window | Notes |",
-            "| --- | ---: | ---: | ---: | ---: | --- | --- |",
+            "| " + " | ".join(header_cols) + " |",
+            "| " + " | ".join(align_cols) + " |",
         ])
         for row in summary.days:
-            lines.append(
-                f"| {row.day.isoformat()} | {row.rain_mm:.1f} | {row.max_temp_c:.1f} | "
-                f"{row.et0_mm:.1f} | {row.net_balance_mm:+.1f} | {row.suitability} | {row.reason} |"
-            )
+            cells = [row.day.isoformat(), f"{row.rain_mm:.1f}", f"{row.max_temp_c:.1f}"]
+            if has_min:
+                cells.append(f"{row.min_temp_c:.1f}" if row.min_temp_c is not None else "—")
+            if has_wind:
+                cells.append(f"{row.wind_speed_max_kmh:.1f}" if row.wind_speed_max_kmh is not None else "—")
+            if has_prob:
+                cells.append(f"{row.rain_probability_pct:.0f}" if row.rain_probability_pct is not None else "—")
+            if has_hum:
+                cells.append(f"{row.humidity_mean_pct:.0f}" if row.humidity_mean_pct is not None else "—")
+            cells.extend([f"{row.et0_mm:.1f}", f"{row.net_balance_mm:+.1f}", row.suitability, row.reason])
+            lines.append("| " + " | ".join(cells) + " |")
         lines.append("")
     elif outcome.weather.error:
         lines.extend([
@@ -227,6 +261,10 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
             "net_balance_mm": summary.net_balance_mm,
             "water_status": summary.status_label,
             "favorable_days_count": summary.favorable_days_count,
+            "min_temp_c": summary.min_temp_c,
+            "max_wind_kmh": summary.max_wind_kmh,
+            "avg_humidity_pct": summary.avg_humidity_pct,
+            "total_gdd_base10": summary.total_gdd_base10,
             "operational_windows": {
                 "spraying_days": [d.isoformat() for d in windows.spraying_favorable_days],
                 "machinery_days": [d.isoformat() for d in windows.machinery_accessible_days],
@@ -245,6 +283,11 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
                     "date": d.day.isoformat(),
                     "rain_mm": d.rain_mm,
                     "max_temp_c": d.max_temp_c,
+                    "min_temp_c": d.min_temp_c,
+                    "wind_speed_max_kmh": d.wind_speed_max_kmh,
+                    "rain_probability_pct": d.rain_probability_pct,
+                    "humidity_mean_pct": d.humidity_mean_pct,
+                    "gdd_base10": d.gdd_base10,
                     "et0_mm": d.et0_mm,
                     "net_balance_mm": d.net_balance_mm,
                     "suitability": d.suitability,

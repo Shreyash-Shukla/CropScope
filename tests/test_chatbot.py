@@ -131,6 +131,26 @@ class ChatbotDossierTests(unittest.TestCase):
         dossier_clear = build_farmer_dossier(outcome_clear)
         self.assertIn("Spray Safety Window Next 48h: FAVORABLE", dossier_clear)
 
+        # Case 3: Clear & dry, but high wind (>15 km/h) in next 48h -> Unsafe to spray
+        windy_days = tuple(
+            ForecastDay(date(2026, 11, 1) + timedelta(days=i), 0.0, 24.0, 3.0, min_temp_c=10.0, wind_speed_max_kmh=22.0)
+            for i in range(7)
+        )
+        windy_weather = WeatherResult(SAMPLE_AREA, windy_days, "Asia/Kolkata", NOW, "https://example.test/weather")
+        windy_outcome = AnalysisOutcome(
+            outcome_clear.request,
+            SourceState(windy_weather, False, None),
+            outcome_clear.satellite,
+            outcome_clear.suggestions,
+            outcome_clear.suggestion_source,
+        )
+        windy_stats = get_dossier_summary_stats(windy_outcome)
+        self.assertFalse(windy_stats["safe_to_spray_next_48h"])
+        self.assertEqual(windy_stats["max_wind_7d_kmh"], 22.0)
+        windy_dossier = build_farmer_dossier(windy_outcome)
+        self.assertIn("Peak Wind Speed: 22.0 km/h", windy_dossier)
+        self.assertIn("| Date | Max Temp (°C) | Min Temp (°C) | Wind (km/h) | Rain (mm) |", windy_dossier)
+
 
 class ChatbotEngineTests(unittest.TestCase):
     def setUp(self):
