@@ -78,6 +78,8 @@ class ChatbotDossierTests(unittest.TestCase):
         self.assertAlmostEqual(stats["total_et0_7d_mm"], 24.5)
         self.assertAlmostEqual(stats["net_water_balance_mm"], 17.5)
         self.assertEqual(stats["mean_ndvi"], 0.58)
+        self.assertEqual(stats["crop_kc"], 0.85)
+        self.assertAlmostEqual(stats["total_etc_7d_mm"], 20.82, places=1)
         self.assertEqual(stats["mean_savi"], 0.52)
         self.assertEqual(stats["valid_pixels_pct"], 95.0)
         self.assertIn("Dense canopy (NDVI >= 0.6)", stats["canopy_zones"])
@@ -215,6 +217,19 @@ class ChatbotEngineTests(unittest.TestCase):
         )
         self.assertIn("Satellite Vegetation Health", resp)
         self.assertIn("0.58", resp)
+
+    def test_fallback_irrigation_includes_crop_etc(self):
+        dry_outcome = make_test_outcome(weather_ok=True, rain_override=0.0, temp_override=30.0)
+        dry_stats = get_dossier_summary_stats(dry_outcome)
+        resp = chat_with_kisan_mitra(
+            [{"role": "user", "content": "Is irrigation needed this week?"}],
+            self.dossier,
+            dry_stats,
+            lang="en",
+            api_key="",
+        )
+        self.assertIn("Crop-adjusted water demand (ETc", resp)
+        self.assertIn("L/acre", resp)
 
     def test_chat_with_gemini_client_mock(self):
         from unittest.mock import MagicMock, patch

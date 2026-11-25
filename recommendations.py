@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from agronomy import compute_crop_water_plan
 from models import AnalysisRequest, SatelliteResult, WeatherResult
 
 
@@ -62,6 +63,17 @@ def build_candidates(
                 "check_soil", "Check soil moisture on site",
                 "Check soil moisture before making any irrigation decision; this forecast is not a soil measurement.",
                 ("rain_total", "et0_total"), 30,
+            ))
+        crop_plan = compute_crop_water_plan(weather, request.crop, request.growth_stage)
+        if crop_plan.estimated_deficit_mm >= 15.0:
+            evidence.append(Evidence(
+                "crop_etc",
+                f"Estimated 7-day {request.crop} ({request.growth_stage}) demand ETc: {crop_plan.total_etc_mm:.1f} mm (Kc={crop_plan.kc:.2f}, deficit {crop_plan.estimated_deficit_mm:.1f} mm).",
+            ))
+            candidates.append(Candidate(
+                "check_crop_irrigation", f"Inspect soil moisture for {request.crop} water demand",
+                f"FAO-56 stage estimate shows a {crop_plan.estimated_deficit_mm:.1f} mm gap (~{crop_plan.deficit_liters_per_acre:,.0f} L/ac); check root-zone moisture on site before irrigating.",
+                ("crop_etc", "rain_total"), 28,
             ))
         windy_days = [day for day in weather.days if day.wind_speed_max_kmh is not None]
         if windy_days:

@@ -21,6 +21,7 @@ from google.genai import types
 
 from agronomy import (
     compute_agro_climatic_summary,
+    compute_crop_water_plan,
     evaluate_operational_windows,
     generate_weather_alerts,
     get_growth_stage_guidance,
@@ -71,6 +72,11 @@ def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
         "max_wind_7d_kmh": None,
         "avg_humidity_7d_pct": None,
         "total_gdd_base10": None,
+        "crop_kc": None,
+        "total_etc_7d_mm": None,
+        "crop_net_balance_mm": None,
+        "estimated_deficit_m3": None,
+        "estimated_deficit_liters_per_acre": None,
         "mean_ndvi": None,
         "mean_savi": None,
         "cloud_cover_pct": None,
@@ -97,6 +103,13 @@ def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
         stats["max_wind_7d_kmh"] = summary.max_wind_kmh
         stats["avg_humidity_7d_pct"] = summary.avg_humidity_pct
         stats["total_gdd_base10"] = summary.total_gdd_base10
+
+        crop_plan = compute_crop_water_plan(weather_res, req.crop, req.growth_stage)
+        stats["crop_kc"] = crop_plan.kc
+        stats["total_etc_7d_mm"] = crop_plan.total_etc_mm
+        stats["crop_net_balance_mm"] = crop_plan.crop_net_balance_mm
+        stats["estimated_deficit_m3"] = crop_plan.deficit_m3
+        stats["estimated_deficit_liters_per_acre"] = crop_plan.deficit_liters_per_acre
 
         # 48h rain & wind outlook (first 2 forecast days)
         first_48h_days = weather_res.days[:2]
@@ -163,6 +176,7 @@ def build_farmer_dossier(outcome: AnalysisOutcome, lang: str = "en") -> str:
             f"- Cumulative 7-Day Rainfall (P): {summary.total_rain_mm:.1f} mm",
             f"- Cumulative 7-Day Evapotranspiration (ET₀): {summary.total_et0_mm:.1f} mm",
             f"- Net Atmospheric Water Balance (P − ET₀): {summary.net_balance_mm:+.1f} mm ({summary.status_label})",
+            f"- Crop-Adjusted Water Demand (ETc, Kc={stats['crop_kc']:.2f} for {req.crop} · {req.growth_stage}): {stats['total_etc_7d_mm']:.1f} mm (Net P − ETc: {stats['crop_net_balance_mm']:+.1f} mm; est. field gap {stats['estimated_deficit_m3']:,.1f} m³ or {stats['estimated_deficit_liters_per_acre']:,.0f} L/acre — atmospheric estimate, verify soil moisture on site)",
             f"- Imminent 48-Hour Rain Forecast: {stats['imminent_rain_48h_mm']:.1f} mm",
             f"- Spray Safety Window Next 48h: {'FAVORABLE' if stats['safe_to_spray_next_48h'] else 'UNFAVORABLE / CAUTION (risk of rain wash-off or heat)'}",
             f"- Peak Rain Day: {stats['peak_rain_day']} with {stats['peak_rain_mm']:.1f} mm rain",
@@ -610,21 +624,37 @@ def generate_fallback_response(
     # 4. Irrigation / Water balance intent
     water_keywords = ["water", "irrigation", "sinchai", "moisture", "पानी", "सिंचाई", "ਨਮੀ", "ਪਾਣੀ", "ਨੀరు", "పాசனம்", "પિયત", "সেচ", "ನೀರಾವರಿ"]
     if any(k in q_lower for k in water_keywords):
+        etc_7d = stats.get("total_etc_7d_mm")
+        crop_kc = stats.get("crop_kc")
+        crop_net = stats.get("crop_net_balance_mm")
+        l_per_ac = stats.get("estimated_deficit_liters_per_acre")
         if lang == "hi":
+            etc_line = (
+                f"- फसल की अनुमानित पानी की मांग (ETc, Kc={crop_kc:.2f}): **{etc_7d:.1f} मिमी** (अंतर: **{crop_net:+.1f} मिमी**, ~**{l_per_ac:,.0f} लीटर/एकड़** कमी)।\n"
+                if etc_7d is not None and crop_kc is not None and crop_net is not None and l_per_ac is not None
+                else ""
+            )
             return (
                 f"💧 **जल संतुलन व सिंचाई सलाह ({crop}):**\n\n"
                 f"- 7 दिनों में संभावित वर्षा: **{rain_7d:.1f} मिमी**।\n"
                 f"- धूप व हवा से नमी हानि (ET₀): **{stats.get('total_et0_7d_mm', 0.0):.1f} मिमी**।\n"
+                f"{etc_line}"
                 f"- शुद्ध जल संतुलन (वर्षा − नमी हानि): **{net_bal:+.1f} मिमी** ({stats.get('water_balance_status', '')})।\n\n"
-                f"💡 *सलाह:* {'मिट्टी में नमी की कमी हो सकती है, यदि वर्षा न हो तो हल्की सिंचाई की योजना बनाएं।' if net_bal < -10 else 'वर्षा से पर्याप्त नमी उपलब्ध है, अतिरिक्त सिंचाई की तुरंत आवश्यकता नहीं है।'}"
+                f"💡 *सलाह:* {'मिट्टी में नमी की जांच करें; यदि ऊपरी मिट्टी सूखी हो तो हल्की सिंचाई की योजना बनाएं।' if (crop_net if crop_net is not None else net_bal) < -10 else 'वर्षा से पर्याप्त नमी या संतुलित स्थिति है, सिंचाई से पहले खेत की मिट्टी जांच लें।'}"
             )
         else:
+            etc_line = (
+                f"- Crop-adjusted water demand (ETc, Kc={crop_kc:.2f}): **{etc_7d:.1f} mm** (crop net P − ETc: **{crop_net:+.1f} mm**, ~**{l_per_ac:,.0f} L/acre** gap).\n"
+                if etc_7d is not None and crop_kc is not None and crop_net is not None and l_per_ac is not None
+                else ""
+            )
             return (
                 f"💧 **Agro-Climatic Water Balance & Irrigation ({crop}):**\n\n"
                 f"- Cumulative 7-day rainfall: **{rain_7d:.1f} mm**.\n"
                 f"- Reference evapotranspiration (ET₀): **{stats.get('total_et0_7d_mm', 0.0):.1f} mm**.\n"
-                f"- Net water balance (P − ET₀): **{net_bal:+.1f} mm** ({stats.get('water_balance_status', '')}).\n\n"
-                f"💡 *Recommendation:* {'Moisture deficit trend; plan scheduled irrigation if soil dry-down occurs.' if net_bal < -10 else 'Moisture accumulation or neutral balance; hold irrigation until topsoil dries.'}"
+                f"{etc_line}"
+                f"- Net atmospheric water balance (P − ET₀): **{net_bal:+.1f} mm** ({stats.get('water_balance_status', '')}).\n\n"
+                f"💡 *Recommendation:* {'Moisture deficit trend; check topsoil moisture on site before scheduling irrigation.' if (crop_net if crop_net is not None else net_bal) < -10 else 'Moisture accumulation or near-balanced outlook; verify root-zone moisture before irrigating.'}"
             )
 
     # Default overview

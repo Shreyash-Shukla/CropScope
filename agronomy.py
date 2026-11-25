@@ -329,3 +329,227 @@ def generate_weather_alerts(weather: WeatherResult) -> tuple[WeatherAlert, ...]:
     return tuple(alerts)
 
 
+# Standard FAO-56 single crop coefficients (Kc) by crop and growth stage.
+FAO_KC_TABLE: dict[str, dict[str, float]] = {
+    "Wheat": {
+        "Seedling": 0.40,
+        "Vegetative": 0.85,
+        "Flowering": 1.15,
+        "Fruit or grain filling": 1.05,
+        "Maturity": 0.40,
+        "Other or unknown": 0.85,
+    },
+    "Rice / Paddy": {
+        "Seedling": 1.05,
+        "Vegetative": 1.15,
+        "Flowering": 1.20,
+        "Fruit or grain filling": 1.10,
+        "Maturity": 0.75,
+        "Other or unknown": 1.10,
+    },
+    "Corn / Maize": {
+        "Seedling": 0.40,
+        "Vegetative": 0.85,
+        "Flowering": 1.20,
+        "Fruit or grain filling": 1.10,
+        "Maturity": 0.55,
+        "Other or unknown": 0.85,
+    },
+    "Soybean": {
+        "Seedling": 0.40,
+        "Vegetative": 0.80,
+        "Flowering": 1.15,
+        "Fruit or grain filling": 1.00,
+        "Maturity": 0.50,
+        "Other or unknown": 0.80,
+    },
+    "Cotton": {
+        "Seedling": 0.35,
+        "Vegetative": 0.75,
+        "Flowering": 1.15,
+        "Fruit or grain filling": 1.05,
+        "Maturity": 0.60,
+        "Other or unknown": 0.80,
+    },
+    "Barley": {
+        "Seedling": 0.40,
+        "Vegetative": 0.80,
+        "Flowering": 1.15,
+        "Fruit or grain filling": 1.00,
+        "Maturity": 0.35,
+        "Other or unknown": 0.80,
+    },
+    "Canola / Mustard": {
+        "Seedling": 0.35,
+        "Vegetative": 0.75,
+        "Flowering": 1.10,
+        "Fruit or grain filling": 0.95,
+        "Maturity": 0.35,
+        "Other or unknown": 0.75,
+    },
+    "Sugarcane": {
+        "Seedling": 0.40,
+        "Vegetative": 0.90,
+        "Flowering": 1.25,
+        "Fruit or grain filling": 1.20,
+        "Maturity": 0.75,
+        "Other or unknown": 0.95,
+    },
+    "Potato": {
+        "Seedling": 0.50,
+        "Vegetative": 0.85,
+        "Flowering": 1.15,
+        "Fruit or grain filling": 1.05,
+        "Maturity": 0.75,
+        "Other or unknown": 0.85,
+    },
+}
+
+_CUSTOM_CROP_ALIASES: dict[str, str] = {
+    "wheat": "Wheat",
+    "gehu": "Wheat",
+    "rice": "Rice / Paddy",
+    "paddy": "Rice / Paddy",
+    "dhan": "Rice / Paddy",
+    "corn": "Corn / Maize",
+    "maize": "Corn / Maize",
+    "makka": "Corn / Maize",
+    "soybean": "Soybean",
+    "soya": "Soybean",
+    "cotton": "Cotton",
+    "kapas": "Cotton",
+    "barley": "Barley",
+    "jau": "Barley",
+    "canola": "Canola / Mustard",
+    "mustard": "Canola / Mustard",
+    "sarson": "Canola / Mustard",
+    "sugarcane": "Sugarcane",
+    "ganna": "Sugarcane",
+    "potato": "Potato",
+    "aloo": "Potato",
+}
+
+_GENERIC_STAGE_KC: dict[str, float] = {
+    "Seedling": 0.45,
+    "Vegetative": 0.80,
+    "Flowering": 1.10,
+    "Fruit or grain filling": 0.95,
+    "Maturity": 0.50,
+    "Other or unknown": 0.85,
+}
+
+
+def get_crop_coefficient(crop: str | None, growth_stage: str | None) -> tuple[float, str]:
+    """Return FAO-56 single crop coefficient (Kc) and provenance label."""
+    stage_key = growth_stage if growth_stage in _GENERIC_STAGE_KC else "Other or unknown"
+    if crop:
+        clean = crop.strip()
+        if clean in FAO_KC_TABLE:
+            return FAO_KC_TABLE[clean][stage_key], f"FAO-56 table ({clean} · {stage_key})"
+        lowered = clean.lower()
+        for token, canonical in _CUSTOM_CROP_ALIASES.items():
+            if token in lowered:
+                return FAO_KC_TABLE[canonical][stage_key], f"FAO-56 table ({canonical} · {stage_key})"
+    return _GENERIC_STAGE_KC[stage_key], f"Generic FAO-56 stage baseline ({stage_key})"
+
+
+@dataclass(frozen=True)
+class CropWaterDay:
+    day: date
+    rain_mm: float
+    et0_mm: float
+    etc_mm: float
+    crop_balance_mm: float
+
+
+@dataclass(frozen=True)
+class CropWaterPlan:
+    crop: str
+    growth_stage: str
+    kc: float
+    kc_source: str
+    total_rain_mm: float
+    total_et0_mm: float
+    total_etc_mm: float
+    crop_net_balance_mm: float
+    estimated_deficit_mm: float
+    field_area_ha: float
+    field_area_acres: float
+    deficit_m3: float
+    deficit_liters_per_acre: float
+    status_label: str
+    guidance_note: str
+    days: tuple[CropWaterDay, ...]
+
+
+def compute_crop_water_plan(
+    weather: WeatherResult,
+    crop: str,
+    growth_stage: str,
+) -> CropWaterPlan:
+    """Compute FAO-56 crop evapotranspiration (ETc = Kc * ET0) and field volume context."""
+    kc, kc_source = get_crop_coefficient(crop, growth_stage)
+    daily_rows: list[CropWaterDay] = []
+    total_rain = 0.0
+    total_et0 = 0.0
+    total_etc = 0.0
+
+    for d in weather.days:
+        etc = round(d.et0_mm * kc, 2)
+        bal = round(d.rain_mm - etc, 2)
+        total_rain += d.rain_mm
+        total_et0 += d.et0_mm
+        total_etc += etc
+        daily_rows.append(CropWaterDay(
+            day=d.day,
+            rain_mm=round(d.rain_mm, 2),
+            et0_mm=round(d.et0_mm, 2),
+            etc_mm=etc,
+            crop_balance_mm=bal,
+        ))
+
+    total_rain = round(total_rain, 2)
+    total_et0 = round(total_et0, 2)
+    total_etc = round(total_etc, 2)
+    net_bal = round(total_rain - total_etc, 2)
+    deficit_mm = round(max(0.0, total_etc - total_rain), 2)
+
+    area_ha = weather.area.area_ha
+    area_acres = weather.area.area_acres
+    # 1 mm over 1 ha = 10 m³ = 10,000 L; 1 mm over 1 acre ≈ 4,046.86 L
+    deficit_m3 = round(deficit_mm * area_ha * 10.0, 1)
+    deficit_l_per_acre = round(deficit_mm * 4046.856, 0)
+
+    if net_bal <= -20.0:
+        status = "High Crop Water Deficit"
+        note = "Crop water demand strongly exceeds forecast rainfall; inspect root-zone soil moisture before scheduling irrigation."
+    elif net_bal <= -8.0:
+        status = "Moderate Crop Water Deficit"
+        note = "Drying trend relative to crop demand; check topsoil moisture in the field before irrigating."
+    elif net_bal >= 15.0:
+        status = "Moisture Surplus"
+        note = "Forecast rainfall exceeds crop demand; hold supplemental irrigation and verify field drainage."
+    else:
+        status = "Near-Balanced Crop Water"
+        note = "Forecast rainfall closely offsets estimated crop water use; monitor soil condition on site."
+
+    return CropWaterPlan(
+        crop=crop or "Unspecified Crop",
+        growth_stage=growth_stage or "Other or unknown",
+        kc=kc,
+        kc_source=kc_source,
+        total_rain_mm=total_rain,
+        total_et0_mm=total_et0,
+        total_etc_mm=total_etc,
+        crop_net_balance_mm=net_bal,
+        estimated_deficit_mm=deficit_mm,
+        field_area_ha=round(area_ha, 2),
+        field_area_acres=round(area_acres, 2),
+        deficit_m3=deficit_m3,
+        deficit_liters_per_acre=deficit_l_per_acre,
+        status_label=status,
+        guidance_note=note,
+        days=tuple(daily_rows),
+    )
+
+

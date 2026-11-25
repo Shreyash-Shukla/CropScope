@@ -5,12 +5,15 @@ from agronomy import (
     COMMON_CROPS,
     GROWTH_STAGE_GUIDANCE,
     AgroClimaticSummary,
+    CropWaterPlan,
     OperationalWindows,
     WeatherAlert,
     compute_agro_climatic_summary,
+    compute_crop_water_plan,
     evaluate_fieldwork_suitability,
     evaluate_operational_windows,
     generate_weather_alerts,
+    get_crop_coefficient,
     get_growth_stage_guidance,
     summarize_canopy_health,
 )
@@ -206,6 +209,35 @@ class AgronomyTests(unittest.TestCase):
         self.assertIn("Frost", categories)
         self.assertIn("Wind", categories)
         self.assertIn("Humidity", categories)
+
+    def test_crop_coefficient_and_water_plan(self):
+        kc_rice, src_rice = get_crop_coefficient("Rice / Paddy", "Flowering")
+        self.assertEqual(kc_rice, 1.20)
+        self.assertIn("Rice / Paddy", src_rice)
+
+        kc_alias, src_alias = get_crop_coefficient("Winter wheat variety", "Seedling")
+        self.assertEqual(kc_alias, 0.40)
+        self.assertIn("Wheat", src_alias)
+
+        kc_custom, src_custom = get_crop_coefficient("Dragonfruit", "Vegetative")
+        self.assertEqual(kc_custom, 0.80)
+        self.assertIn("Generic", src_custom)
+
+        # 7 days with 0 rain, 4.0 mm ET0 -> total ET0 = 28 mm; Wheat Flowering Kc = 1.15 -> ETc = 32.2 mm
+        days = tuple(
+            ForecastDay(date(2026, 11, 1) + timedelta(days=i), 0.0, 30.0, 4.0)
+            for i in range(7)
+        )
+        weather = WeatherResult(SAMPLE_AREA, days, "UTC", date(2026, 11, 1), "http://test")
+        plan = compute_crop_water_plan(weather, "Wheat", "Flowering")
+        self.assertIsInstance(plan, CropWaterPlan)
+        self.assertEqual(plan.kc, 1.15)
+        self.assertAlmostEqual(plan.total_etc_mm, 32.2, places=2)
+        self.assertAlmostEqual(plan.crop_net_balance_mm, -32.2, places=2)
+        self.assertAlmostEqual(plan.estimated_deficit_mm, 32.2, places=2)
+        self.assertGreater(plan.deficit_m3, 0.0)
+        self.assertGreater(plan.deficit_liters_per_acre, 120_000.0)
+        self.assertIn("Deficit", plan.status_label)
 
 
 if __name__ == "__main__":

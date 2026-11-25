@@ -202,6 +202,10 @@ class AppUITests(unittest.TestCase):
         self.assertIn("Peak wind speed", metric_labels)
         self.assertIn("Mean humidity", metric_labels)
         self.assertIn("7-Day GDD (Base 10°C)", metric_labels)
+        self.assertIn("Crop Coefficient (Kc)", metric_labels)
+        self.assertIn("7-Day Crop Demand (ETc)", metric_labels)
+        self.assertIn("Crop Net Balance (P − ETc)", metric_labels)
+        self.assertIn("Est. Deficit Volume", metric_labels)
 
 
 if __name__ == "__main__":

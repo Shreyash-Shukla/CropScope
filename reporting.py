@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from agronomy import (
     compute_agro_climatic_summary,
+    compute_crop_water_plan,
     evaluate_operational_windows,
     generate_weather_alerts,
     get_growth_stage_guidance,
@@ -44,6 +45,7 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
     if isinstance(weather_res, WeatherResult):
         summary = compute_agro_climatic_summary(weather_res)
         windows = evaluate_operational_windows(weather_res)
+        crop_plan = compute_crop_water_plan(weather_res, req.crop, req.growth_stage)
         source_label = "Saved cache" if outcome.weather.cached else "Live Open-Meteo API"
         lines.extend([
             f"- **Data Source:** {source_label} ({weather_res.source_url})",
@@ -52,6 +54,8 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
             f"- **Total Forecast Rain:** {summary.total_rain_mm:.1f} mm",
             f"- **Total Reference ET₀:** {summary.total_et0_mm:.1f} mm",
             f"- **Net Atmospheric Water Balance (P − ET₀):** {summary.net_balance_mm:+.1f} mm ({summary.status_label})",
+            f"- **Crop Water Demand (ETc, {crop_plan.kc_source}, Kc={crop_plan.kc:.2f}):** {crop_plan.total_etc_mm:.1f} mm (Net P − ETc: {crop_plan.crop_net_balance_mm:+.1f} mm · {crop_plan.status_label})",
+            f"- **Estimated Field Deficit Volume:** {crop_plan.deficit_m3:,.1f} m³ total ({crop_plan.deficit_liters_per_acre:,.0f} L/acre across {crop_plan.field_area_acres:.2f} ac — verify soil moisture before irrigating)",
             f"- **Favorable Fieldwork Days:** {summary.favorable_days_count} of {len(summary.days)} days",
         ])
         if summary.min_temp_c is not None:
@@ -251,6 +255,7 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
         summary = compute_agro_climatic_summary(weather_res)
         windows = evaluate_operational_windows(weather_res)
         alerts = generate_weather_alerts(weather_res)
+        crop_plan = compute_crop_water_plan(weather_res, outcome.request.crop, outcome.request.growth_stage)
         data["weather"] = {
             "cached": outcome.weather.cached,
             "timezone": weather_res.timezone,
@@ -260,6 +265,16 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
             "total_et0_mm": summary.total_et0_mm,
             "net_balance_mm": summary.net_balance_mm,
             "water_status": summary.status_label,
+            "crop_water_plan": {
+                "kc": crop_plan.kc,
+                "kc_source": crop_plan.kc_source,
+                "total_etc_mm": crop_plan.total_etc_mm,
+                "crop_net_balance_mm": crop_plan.crop_net_balance_mm,
+                "estimated_deficit_mm": crop_plan.estimated_deficit_mm,
+                "deficit_m3": crop_plan.deficit_m3,
+                "deficit_liters_per_acre": crop_plan.deficit_liters_per_acre,
+                "status_label": crop_plan.status_label,
+            },
             "favorable_days_count": summary.favorable_days_count,
             "min_temp_c": summary.min_temp_c,
             "max_wind_kmh": summary.max_wind_kmh,

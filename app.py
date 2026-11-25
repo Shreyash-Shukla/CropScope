@@ -25,6 +25,7 @@ from agronomy import (
     COMMON_CROPS,
     GROWTH_STAGE_GUIDANCE,
     compute_agro_climatic_summary,
+    compute_crop_water_plan,
     evaluate_operational_windows,
     generate_weather_alerts,
     get_growth_stage_guidance,
@@ -1129,6 +1130,56 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
         st.line_chart(frame, x="Date", y=temp_cols, y_label=temp_unit, height=260)
 
     windows = evaluate_operational_windows(result)
+    crop_plan = compute_crop_water_plan(result, request.crop, request.growth_stage)
+    with st.expander(f"💧 Crop-Specific Water Planner ({request.crop} · Kc = {crop_plan.kc:.2f})", expanded=True):
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(
+            "Crop Coefficient (Kc)",
+            f"{crop_plan.kc:.2f}",
+            delta=request.growth_stage,
+            delta_color="off",
+            help=f"Source: {crop_plan.kc_source}. Scales reference ET₀ to estimated crop water demand.",
+        )
+        c2.metric(
+            f"7-Day Crop Demand (ETc)",
+            f"{to_len(crop_plan.total_etc_mm)} {len_unit}",
+            help="Estimated 7-day crop evapotranspiration (Kc × ET₀).",
+        )
+        c_net_str = (
+            f"{to_len(crop_plan.crop_net_balance_mm):+0.2f}"
+            if is_imperial
+            else f"{crop_plan.crop_net_balance_mm:+0.1f}"
+        )
+        c3.metric(
+            f"Crop Net Balance (P − ETc)",
+            f"{c_net_str} {len_unit}",
+            delta=crop_plan.status_label,
+            delta_color="normal" if crop_plan.crop_net_balance_mm >= 0 else "inverse",
+            help="7-day forecast rainfall minus estimated crop ETc.",
+        )
+        vol_label = (
+            f"{crop_plan.deficit_liters_per_acre / 3.78541:,.0f} gal/ac"
+            if is_imperial
+            else f"{crop_plan.deficit_liters_per_acre:,.0f} L/ac"
+        )
+        c4.metric(
+            "Est. Deficit Volume",
+            vol_label,
+            delta=f"{crop_plan.deficit_m3:,.1f} m³ total ({crop_plan.field_area_acres:.1f} ac)",
+            delta_color="off",
+            help="Volume equivalent of (ETc − Rain) scaled to your exact field boundary. 1 mm = 10,000 L/ha (4,047 L/acre).",
+        )
+        active_field = get_active_field()
+        irrig_note = (
+            f" · Saved parcel irrigation source: **{active_field['irrigation_source']}**"
+            if active_field and active_field.get("irrigation_source")
+            else ""
+        )
+        st.caption(
+            f"📊 {crop_plan.guidance_note}{irrig_note} "
+            "*(FAO-56 atmospheric estimate only; verify soil moisture on site before irrigating.)*"
+        )
+
     with st.expander("🚜 Field Operations Planner (7-day operational windows)", expanded=False):
         op1, op2, op3 = st.columns(3)
         op1.metric("🚜 Machinery Access", f"{len(windows.machinery_accessible_days)} / 7 days", help="Low soil saturation risk; minimal chance of field rutting.")

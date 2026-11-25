@@ -81,6 +81,8 @@ class ReportingTests(unittest.TestCase):
         self.assertIn("weather", data)
         self.assertIn("satellite", data)
         self.assertEqual(data["weather"]["favorable_days_count"], 1)
+        self.assertIn("crop_water_plan", data["weather"])
+        self.assertAlmostEqual(data["weather"]["crop_water_plan"]["kc"], 0.85)
         self.assertIn("operational_windows", data["weather"])
         self.assertIn("alerts", data["weather"])
         self.assertEqual(data["satellite"]["scene_id"], "scene-karnal-123")
