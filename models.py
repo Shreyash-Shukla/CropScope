@@ -96,6 +96,10 @@ class SatelliteResult:
     sun_elevation: float | None = None
     sun_azimuth: float | None = None
     mgrs_tile: str | None = None
+    ndvi_viridis_png: bytes | None = None
+    ndvi_std: float | None = None
+    uniformity_score_pct: float | None = None
+    quadrant_stats: dict[str, dict[str, float]] | None = None
 
     def __getattr__(self, name: str):
         # Gracefully return None for optional fields on legacy or unpickled instances

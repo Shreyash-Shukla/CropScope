@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from agronomy import compute_crop_water_plan
 from models import AnalysisRequest, SatelliteResult, WeatherResult
+from satellite import summarize_scouting_hotspot
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,19 @@ def build_candidates(
                 "inspect_greenness", "Inspect low-greenness patches",
                 "Compare the NDVI image with the crop and growth stage on site; bare soil or other land can affect the rectangle.",
                 ("ndvi_mean", "valid_pixels"), 40,
+            ))
+        uniformity = getattr(satellite, "uniformity_score_pct", None)
+        quadrants = getattr(satellite, "quadrant_stats", None)
+        if uniformity is not None and uniformity < 75.0:
+            hotspot = summarize_scouting_hotspot(quadrants, uniformity)
+            evidence.append(Evidence(
+                "canopy_uniformity",
+                f"Field canopy uniformity: {uniformity:.1f}%. {hotspot}".strip(),
+            ))
+            candidates.append(Candidate(
+                "scout_patchy_zone", "Walk uneven field quadrants first",
+                "Inspect the lower-greenness quadrant on site to check whether soil, drainage, or borders explain the unevenness.",
+                ("canopy_uniformity",), 45,
             ))
         candidates.append(Candidate(
             "verify_imagery", "Compare imagery with the field",

@@ -2,7 +2,8 @@ import unittest
 from unittest.mock import patch
 import folium
 
-from app import add_map_layers, get_draw_map_initial_location
+from app import add_map_layers, build_ndvi_overlay_map, get_draw_map_initial_location
+from location import SAMPLE_AREA
 
 
 class MapLayersTests(unittest.TestCase):
@@ -91,6 +92,20 @@ class MapLayersTests(unittest.TestCase):
         self.assertAlmostEqual(coords[0], 29.750, places=3)
         self.assertAlmostEqual(coords[1], 77.050, places=3)
         self.assertEqual(zoom, 15)
+
+    def test_build_ndvi_overlay_map_embeds_image_overlay_and_quadrants(self):
+        quads = {
+            "North-West": {"mean_ndvi": 0.65, "low_vigor_pct": 5.0, "valid_pct": 100.0},
+            "South-East": {"mean_ndvi": 0.25, "low_vigor_pct": 60.0, "valid_pct": 100.0},
+        }
+        m = build_ndvi_overlay_map(SAMPLE_AREA, b"\x89PNG\r\n\x1a\nfakepng", opacity=0.8, quadrant_stats=quads)
+        overlays = [c for c in m._children.values() if isinstance(c, folium.raster_layers.ImageOverlay)]
+        self.assertEqual(len(overlays), 1)
+        self.assertEqual(overlays[0].layer_name, "🌿 Cloud-Masked NDVI Overlay")
+        markers = [c for c in m._children.values() if isinstance(c, folium.CircleMarker)]
+        self.assertEqual(len(markers), 2)
+        html = m._repr_html_()
+        self.assertIn("data:image/png;base64,", html)
 
 
 if __name__ == "__main__":

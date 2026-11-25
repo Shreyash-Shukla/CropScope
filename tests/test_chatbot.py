@@ -218,6 +218,30 @@ class ChatbotEngineTests(unittest.TestCase):
         self.assertIn("Satellite Vegetation Health", resp)
         self.assertIn("0.58", resp)
 
+    def test_dossier_includes_spatial_uniformity_and_hotspot(self):
+        sat = SatelliteResult(
+            SAMPLE_AREA, "scene-quad", NOW, 2.0, "https://example.test/scene",
+            NOW, b"red", b"nir", b"ndvi", 0.54, 0.53, 94.0, None, 10, 10,
+            uniformity_score_pct=65.0,
+            quadrant_stats={
+                "North-West": {"mean_ndvi": 0.68, "low_vigor_pct": 5.0, "valid_pct": 100.0},
+                "South-East": {"mean_ndvi": 0.28, "low_vigor_pct": 60.0, "valid_pct": 100.0},
+            },
+        )
+        outcome = AnalysisOutcome(
+            self.outcome.request,
+            self.outcome.weather,
+            SourceState(sat, False, None),
+            self.outcome.suggestions,
+            self.outcome.suggestion_source,
+        )
+        stats = get_dossier_summary_stats(outcome)
+        self.assertEqual(stats["uniformity_score_pct"], 65.0)
+        self.assertIn("South-East", stats["scouting_hotspot"])
+        dossier = build_farmer_dossier(outcome)
+        self.assertIn("4-Quadrant Spatial Vigor", dossier)
+        self.assertIn("South-East: Mean NDVI 0.280", dossier)
+
     def test_fallback_irrigation_includes_crop_etc(self):
         dry_outcome = make_test_outcome(weather_ok=True, rain_override=0.0, temp_override=30.0)
         dry_stats = get_dossier_summary_stats(dry_outcome)

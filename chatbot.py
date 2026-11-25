@@ -30,6 +30,7 @@ from agronomy import (
 from analysis import AnalysisOutcome
 from i18n import SUPPORTED_LANGUAGES, t
 from models import SatelliteResult, WeatherResult
+from satellite import summarize_scouting_hotspot
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,9 @@ def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
         "estimated_deficit_liters_per_acre": None,
         "mean_ndvi": None,
         "mean_savi": None,
+        "uniformity_score_pct": None,
+        "scouting_hotspot": "",
+        "quadrant_stats": {},
         "cloud_cover_pct": None,
         "valid_pixels_pct": None,
         "canopy_summary": "",
@@ -132,6 +136,12 @@ def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
         stats["satellite_available"] = True
         stats["mean_ndvi"] = sat_res.mean_ndvi
         stats["mean_savi"] = sat_res.mean_savi
+        stats["uniformity_score_pct"] = getattr(sat_res, "uniformity_score_pct", None)
+        stats["quadrant_stats"] = getattr(sat_res, "quadrant_stats", None) or {}
+        stats["scouting_hotspot"] = summarize_scouting_hotspot(
+            stats["quadrant_stats"] or None,
+            stats["uniformity_score_pct"],
+        )
         stats["cloud_cover_pct"] = sat_res.scene_cloud_percent
         stats["valid_pixels_pct"] = sat_res.valid_pixel_percent
         stats["canopy_zones"] = sat_res.canopy_zones or {}
@@ -277,6 +287,17 @@ def build_farmer_dossier(outcome: AnalysisOutcome, lang: str = "en") -> str:
             lines.append("### Canopy Density Zonation Breakdown:")
             for zone_name, pct in sat_res.canopy_zones.items():
                 lines.append(f"- {zone_name}: {pct:.1f}% of field area")
+        if stats["uniformity_score_pct"] is not None:
+            lines.append(f"- Field Canopy Uniformity: {stats['uniformity_score_pct']:.1f}%")
+        if stats["scouting_hotspot"]:
+            lines.append(f"- Spatial Scouting Priority: {stats['scouting_hotspot']}")
+        if stats["quadrant_stats"]:
+            lines.append("")
+            lines.append("### 4-Quadrant Spatial Vigor:")
+            for q_name, q_vals in stats["quadrant_stats"].items():
+                lines.append(
+                    f"- {q_name}: Mean NDVI {q_vals['mean_ndvi']:.3f} ({q_vals['low_vigor_pct']:.1f}% sparse/bare)"
+                )
     else:
         err_msg = outcome.satellite.error or "Satellite imagery pass is currently unavailable."
         lines.append(f"- Status: Satellite data unavailable ({err_msg})")

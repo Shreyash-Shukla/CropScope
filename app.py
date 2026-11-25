@@ -1,5 +1,6 @@
 """CropScope: selected-area weather and Sentinel-2 vegetation processing."""
 
+import base64
 import os
 import re
 from pathlib import Path
@@ -79,6 +80,7 @@ from location import (
 )
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
 from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
+from satellite import summarize_scouting_hotspot
 from auth import (
     SESSION_ACTIVE_CHAT_KEY,
     get_active_field,
@@ -1198,6 +1200,107 @@ def show_forecast(result: WeatherResult, request: AnalysisRequest) -> None:
     )
 
 
+def build_ndvi_overlay_map(
+    area: AnalysisArea,
+    overlay_png: bytes,
+    opacity: float = 0.75,
+    quadrant_stats: dict[str, dict[str, float]] | None = None,
+) -> folium.Map:
+    """Create a Folium map with the cloud-masked NDVI raster georeferenced onto the field."""
+    overlay_map = folium.Map(
+        location=list(area.center),
+        zoom_start=15,
+        max_zoom=20,
+        control_scale=True,
+        tiles=None,
+    )
+    encoded_png = base64.b64encode(overlay_png).decode("ascii")
+    folium.raster_layers.ImageOverlay(
+        name="🌿 Cloud-Masked NDVI Overlay",
+        image=f"data:image/png;base64,{encoded_png}",
+        bounds=[[area.south, area.west], [area.north, area.east]],
+        opacity=opacity,
+        interactive=True,
+        cross_origin=False,
+        zindex=2,
+    ).add_to(overlay_map)
+    folium.Rectangle(
+        bounds=[[area.south, area.west], [area.north, area.east]],
+        color="#ff6a1a",
+        weight=2,
+        fill=False,
+        popup=f"Analysis Boundary: {area.formatted_area()}",
+    ).add_to(overlay_map)
+
+    if quadrant_stats:
+        lat_mid, lon_mid = area.center
+        q_centers = {
+            "North-West": ((lat_mid + area.north) / 2, (area.west + lon_mid) / 2),
+            "North-East": ((lat_mid + area.north) / 2, (lon_mid + area.east) / 2),
+            "South-West": ((area.south + lat_mid) / 2, (area.west + lon_mid) / 2),
+            "South-East": ((area.south + lat_mid) / 2, (lon_mid + area.east) / 2),
+        }
+        for q_name, q_vals in quadrant_stats.items():
+            if q_name in q_centers:
+                q_lat, q_lon = q_centers[q_name]
+                folium.CircleMarker(
+                    location=[q_lat, q_lon],
+                    radius=5,
+                    color="#ff6a1a",
+                    fill=True,
+                    fill_color="#0c0e11",
+                    fill_opacity=0.85,
+                    tooltip=(
+                        f"{q_name}: Mean NDVI {q_vals['mean_ndvi']:.3f} "
+                        f"({q_vals['low_vigor_pct']:.1f}% sparse/bare)"
+                    ),
+                ).add_to(overlay_map)
+
+    add_map_layers(overlay_map)
+    overlay_map.fit_bounds([[area.south, area.west], [area.north, area.east]])
+    return overlay_map
+
+
+def _render_ndvi_panel(result: SatelliteResult, use_viridis: bool) -> bytes | None:
+    """Render the active NDVI image, legend, and PNG download button."""
+    viridis_png = getattr(result, "ndvi_viridis_png", None)
+    active_png = viridis_png if (use_viridis and viridis_png is not None) else result.ndvi_png
+    if active_png is None:
+        return None
+    if use_viridis and viridis_png is not None:
+        caption = "Cloud-masked NDVI (Colorblind-Safe Viridis) · Purple = Low · Yellow = Dense Canopy"
+        gradient = "linear-gradient(to right, rgb(68,1,84), rgb(59,82,139) 40%, rgb(33,145,140) 60%, rgb(94,201,98) 80%, rgb(253,231,37) 100%)"
+        suffix = "viridis"
+    else:
+        caption = "Cloud-masked NDVI · Brown = Soil/Water · Green = Active Canopy"
+        gradient = "linear-gradient(to right, rgb(117,72,43), rgb(221,209,164) 50%, rgb(187,215,126) 65%, rgb(64,148,78) 80%, rgb(15,78,44) 100%)"
+        suffix = "agronomic"
+    st.image(active_png, caption=caption, width="stretch")
+    st.markdown(
+        f"""
+        <div style="margin-top: 4px; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; font-size: 10.5px; opacity: 0.85; font-weight: 500;">
+            <span>−1.0 (Water)</span>
+            <span>0.0 (Soil)</span>
+            <span>+0.3 (Sparse)</span>
+            <span>+0.6 (Moderate)</span>
+            <span>+1.0 (Dense)</span>
+          </div>
+          <div style="height: 10px; width: 100%; border-radius: 4px; background: {gradient};"></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.download_button(
+        "DOWNLOAD NDVI MAP (PNG)",
+        data=active_png,
+        file_name=f"sentinel2_{result.scene_id}_ndvi_{suffix}.png",
+        mime="image/png",
+        use_container_width=True,
+    )
+    return active_png
+
+
 def show_satellite(result: SatelliteResult) -> None:
     platform_label = getattr(result, "platform", None) or "Sentinel-2"
     mgrs_tile = getattr(result, "mgrs_tile", None)
@@ -1208,6 +1311,9 @@ def show_satellite(result: SatelliteResult) -> None:
     scene_thumbnail_url = getattr(result, "scene_thumbnail_url", None)
     mean_savi = getattr(result, "mean_savi", None)
     canopy_zones = getattr(result, "canopy_zones", None)
+    ndvi_viridis_png = getattr(result, "ndvi_viridis_png", None)
+    uniformity_score_pct = getattr(result, "uniformity_score_pct", None)
+    quadrant_stats = getattr(result, "quadrant_stats", None)
 
     st.markdown(
         f"""
@@ -1305,26 +1411,15 @@ def show_satellite(result: SatelliteResult) -> None:
                     """,
                     unsafe_allow_html=True,
                 )
-                st.image(
-                    result.ndvi_png,
-                    caption="Cloud-masked NDVI · Brown = Soil/Water · Green = Active Canopy",
-                    width="stretch",
-                )
-                st.markdown(
-                    """
-                    <div style="margin-top: 4px; margin-bottom: 8px;">
-                      <div style="display: flex; justify-content: space-between; font-size: 10.5px; opacity: 0.85; font-weight: 500;">
-                        <span>−1.0 (Water)</span>
-                        <span>0.0 (Soil)</span>
-                        <span>+0.3 (Sparse)</span>
-                        <span>+0.6 (Moderate)</span>
-                        <span>+1.0 (Dense)</span>
-                      </div>
-                      <div style="height: 10px; width: 100%; border-radius: 4px; background: linear-gradient(to right, rgb(117,72,43), rgb(221,209,164) 50%, rgb(187,215,126) 65%, rgb(64,148,78) 80%, rgb(15,78,44) 100%);"></div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                use_viridis = False
+                if ndvi_viridis_png is not None:
+                    use_viridis = st.toggle(
+                        "Colorblind-safe palette (Viridis)",
+                        value=False,
+                        key="ndvi_colorblind_toggle",
+                        help="Switch from brown-green to blue-green-yellow Viridis palette for color-vision accessibility.",
+                    )
+                active_ndvi_png = _render_ndvi_panel(result, use_viridis)
                 met_c1, met_c2 = st.columns(2)
                 with met_c1:
                     st.metric("Usable pixels in area", f"{result.valid_pixel_percent:.1f}%", help="Percentage of pixels in the analysis rectangle free from cloud, shadow, snow, or defective data.")
@@ -1337,31 +1432,88 @@ def show_satellite(result: SatelliteResult) -> None:
 
         else:
             # Fallback if true_color_png is None (e.g. legacy cache)
+            use_viridis = False
+            if ndvi_viridis_png is not None:
+                use_viridis = st.toggle(
+                    "Colorblind-safe palette (Viridis)",
+                    value=False,
+                    key="ndvi_colorblind_toggle",
+                    help="Switch from brown-green to blue-green-yellow Viridis palette for color-vision accessibility.",
+                )
             left_ndvi, right_ndvi = st.columns([2, 1])
             with left_ndvi:
-                st.image(result.ndvi_png, caption="Cloud-masked NDVI · transparent = excluded", width="stretch")
-                st.markdown(
-                    """
-                    <div style="margin-top: 4px; margin-bottom: 8px;">
-                      <div style="display: flex; justify-content: space-between; font-size: 11px; opacity: 0.85; font-weight: 500;">
-                        <span>−1.0 (Water)</span>
-                        <span>0.0 (Soil)</span>
-                        <span>+0.3 (Sparse)</span>
-                        <span>+0.6 (Moderate)</span>
-                        <span>+1.0 (Dense)</span>
-                      </div>
-                      <div style="height: 10px; width: 100%; border-radius: 4px; background: linear-gradient(to right, rgb(117,72,43), rgb(221,209,164) 50%, rgb(187,215,126) 65%, rgb(64,148,78) 80%, rgb(15,78,44) 100%);"></div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                active_ndvi_png = _render_ndvi_panel(result, use_viridis)
             with right_ndvi:
                 st.metric("Usable pixels in area", f"{result.valid_pixel_percent:.1f}%", help="Percentage of pixels in the analysis rectangle free from cloud, shadow, snow, or defective data.")
                 st.metric("Mean NDVI", f"{result.mean_ndvi:.3f}")
                 st.metric("Median NDVI", f"{result.median_ndvi:.3f}")
                 if mean_savi is not None:
-                    st.metric("Mean SAVI (Soil-Adjusted)", f"{mean_savi:.3f}", help="Soil-Adjusted Vegetation Index reduces bare-soil background distortion in sparse or emerging canopies.")
+                    st.metric("Mean SAVI (Soil-Adj)", f"{mean_savi:.3f}", help="Soil-Adjusted Vegetation Index reduces bare-soil background distortion in sparse or emerging canopies.")
                 st.caption("NDVI & SAVI describe greenness in this analysis rectangle. They cannot identify a disease, prove crop type, or measure yield.")
+
+        if uniformity_score_pct is not None or quadrant_stats:
+            hotspot_msg = summarize_scouting_hotspot(quadrant_stats, uniformity_score_pct)
+            with st.expander("🧭 Spatial Scouting Compass & Field Uniformity", expanded=True):
+                u_col1, u_col2 = st.columns([1, 2.5], vertical_alignment="center")
+                with u_col1:
+                    if uniformity_score_pct is not None:
+                        st.metric(
+                            "Canopy Uniformity",
+                            f"{uniformity_score_pct:.1f}%",
+                            delta=f"σ = {result.ndvi_std:.3f}" if getattr(result, "ndvi_std", None) is not None else None,
+                            delta_color="off",
+                            help="Measures how evenly vegetation is distributed across clear pixels (higher = more uniform stand).",
+                        )
+                with u_col2:
+                    if hotspot_msg:
+                        st.info(f"🧭 {hotspot_msg}")
+                if quadrant_stats:
+                    row1_l, row1_r = st.columns(2)
+                    row2_l, row2_r = st.columns(2)
+                    q_slots = [
+                        (row1_l, "North-West", "↖ North-West"),
+                        (row1_r, "North-East", "↗ North-East"),
+                        (row2_l, "South-West", "↙ South-West"),
+                        (row2_r, "South-East", "↘ South-East"),
+                    ]
+                    for col, q_key, q_label in q_slots:
+                        q_data = quadrant_stats.get(q_key)
+                        with col:
+                            if q_data:
+                                st.metric(
+                                    q_label,
+                                    f"NDVI {q_data['mean_ndvi']:.3f}",
+                                    delta=f"{q_data['low_vigor_pct']:.1f}% sparse/bare",
+                                    delta_color="off",
+                                )
+
+        if active_ndvi_png is not None:
+            with st.expander("🗺️ Georeferenced NDVI Field Overlay (Locate Stress on Map)", expanded=False):
+                overlay_opacity = st.slider(
+                    "NDVI Overlay Opacity",
+                    min_value=0.2,
+                    max_value=1.0,
+                    value=0.75,
+                    step=0.05,
+                    key="ndvi_overlay_opacity",
+                )
+                overlay_map = build_ndvi_overlay_map(
+                    result.area,
+                    active_ndvi_png,
+                    opacity=overlay_opacity,
+                    quadrant_stats=quadrant_stats,
+                )
+                overlay_key = f"ndvi_geo_{result.scene_id}_{int(overlay_opacity * 100)}_{int(use_viridis)}"
+                st_folium(
+                    overlay_map,
+                    key=overlay_key,
+                    height=380,
+                    use_container_width=True,
+                    center=list(result.area.center),
+                    zoom=15,
+                    returned_objects=[],
+                )
+                st.caption("Toggle the '🌿 Cloud-Masked NDVI Overlay' checkbox in the top-right layer menu to compare crop stress directly against roads, canals, and field boundaries.")
 
         # Always show vegetation canopy distribution and core metrics for complete agronomic analysis
         if canopy_zones:

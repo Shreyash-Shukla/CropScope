@@ -207,6 +207,54 @@ class AppUITests(unittest.TestCase):
         self.assertIn("Crop Net Balance (P − ETc)", metric_labels)
         self.assertIn("Est. Deficit Volume", metric_labels)
 
+    def test_spatial_scouting_and_colorblind_toggle_render(self):
+        import io
+        from datetime import date, datetime, timedelta, timezone
+        from PIL import Image
+        from analysis import AnalysisOutcome, SourceState
+        from location import SAMPLE_AREA
+        from models import AnalysisRequest, SatelliteResult
+
+        def tiny_png() -> bytes:
+            buf = io.BytesIO()
+            Image.new("RGBA", (4, 4), (40, 150, 60, 255)).save(buf, format="PNG")
+            return buf.getvalue()
+
+        now = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
+        png_bytes = tiny_png()
+        sat = SatelliteResult(
+            SAMPLE_AREA, "scene-spatial", now, 3.0, "https://example.test/scene",
+            now, png_bytes, png_bytes, png_bytes, 0.52, 0.51, 95.0, None, 4, 4,
+            mean_savi=0.46,
+            true_color_png=png_bytes,
+            ndvi_viridis_png=png_bytes,
+            ndvi_std=0.18,
+            uniformity_score_pct=64.0,
+            quadrant_stats={
+                "North-West": {"mean_ndvi": 0.65, "low_vigor_pct": 5.0, "valid_pct": 100.0},
+                "North-East": {"mean_ndvi": 0.62, "low_vigor_pct": 8.0, "valid_pct": 100.0},
+                "South-West": {"mean_ndvi": 0.55, "low_vigor_pct": 15.0, "valid_pct": 100.0},
+                "South-East": {"mean_ndvi": 0.28, "low_vigor_pct": 62.0, "valid_pct": 100.0},
+            },
+        )
+        req = AnalysisRequest(SAMPLE_AREA, "Wheat", "Vegetative")
+        outcome = AnalysisOutcome(req, SourceState(None, False, "Offline"), SourceState(sat, False, None), (), None)
+
+        at = AppTest.from_file(APP_PATH, default_timeout=25)
+        at.run()
+        at.radio[0].set_value("Use sample preset")
+        at.session_state["analysis_request"] = req
+        at.session_state["analysis_outcome"] = outcome
+        at.run()
+        self.assertFalse(at.exception)
+        metric_labels = {m.label for m in at.metric}
+        self.assertIn("Canopy Uniformity", metric_labels)
+        self.assertIn("↘ South-East", metric_labels)
+        toggle = at.toggle(key="ndvi_colorblind_toggle")
+        self.assertIsNotNone(toggle)
+        toggle.set_value(True).run()
+        self.assertFalse(at.exception)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -123,6 +123,27 @@ class AnalysisTests(unittest.TestCase):
         self.assertIn("protect_frost", rec_ids)
         self.assertIn("hold_windy_spray", rec_ids)
 
+    def test_satellite_cache_roundtrip_preserves_spatial_scouting_metrics(self):
+        sat = SatelliteResult(
+            SAMPLE_AREA, "scene-spatial", NOW, 4.0, "https://example.test/scene",
+            NOW, b"red", b"nir", b"ndvi", 0.50, 0.49, 92.0, None, 10, 10,
+            ndvi_viridis_png=b"viridis",
+            ndvi_std=0.21,
+            uniformity_score_pct=58.0,
+            quadrant_stats={"North-West": {"mean_ndvi": 0.65, "low_vigor_pct": 5.0, "valid_pct": 100.0},
+                            "South-East": {"mean_ndvi": 0.25, "low_vigor_pct": 70.0, "valid_pct": 100.0}},
+        )
+        self.cache.save_satellite(sat)
+        loaded = self.cache.load_satellite(SAMPLE_AREA)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.ndvi_viridis_png, b"viridis")
+        self.assertAlmostEqual(loaded.uniformity_score_pct, 58.0)
+        self.assertEqual(loaded.quadrant_stats["South-East"]["mean_ndvi"], 0.25)
+
+        outcome = analyze(self.request, self.cache, cached_only=True, ai_ranker=self.no_ai)
+        rec_ids = {s.candidate.id for s in outcome.suggestions}
+        self.assertIn("scout_patchy_zone", rec_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

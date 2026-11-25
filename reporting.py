@@ -13,6 +13,7 @@ from agronomy import (
 )
 from analysis import AnalysisOutcome
 from models import SatelliteResult, WeatherResult
+from satellite import summarize_scouting_hotspot
 
 
 def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime | None = None) -> str:
@@ -162,6 +163,10 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
             ])
             if mean_savi is not None:
                 lines.append(f"- **Mean SAVI (Soil-Adjusted):** {mean_savi:.3f}")
+            uniformity = getattr(sat_res, "uniformity_score_pct", None)
+            quadrant_stats = getattr(sat_res, "quadrant_stats", None)
+            if uniformity is not None:
+                lines.append(f"- **Field Canopy Uniformity:** {uniformity:.1f}%")
             if canopy_zones:
                 lines.append("- **Canopy Distribution Zones:**")
                 for zone_name, pct in canopy_zones.items():
@@ -169,6 +174,15 @@ def generate_advisory_markdown(outcome: AnalysisOutcome, generated_at: datetime 
                 canopy_summary = summarize_canopy_health(canopy_zones)
                 if canopy_summary:
                     lines.append(f"- **Canopy Summary:** {canopy_summary}")
+            if quadrant_stats:
+                hotspot = summarize_scouting_hotspot(quadrant_stats, uniformity)
+                if hotspot:
+                    lines.append(f"- **Spatial Scouting Cue:** {hotspot}")
+                lines.append("- **4-Quadrant Vigor Breakdown:**")
+                for q_name, q_vals in quadrant_stats.items():
+                    lines.append(
+                        f"  - {q_name}: Mean NDVI {q_vals['mean_ndvi']:.3f} ({q_vals['low_vigor_pct']:.1f}% sparse/bare)"
+                    )
         lines.append("")
     elif outcome.satellite.error:
         lines.extend([
@@ -322,6 +336,9 @@ def generate_advisory_json(outcome: AnalysisOutcome, generated_at: datetime | No
             "mean_ndvi": sat_res.mean_ndvi,
             "median_ndvi": sat_res.median_ndvi,
             "mean_savi": getattr(sat_res, "mean_savi", None),
+            "ndvi_std": getattr(sat_res, "ndvi_std", None),
+            "uniformity_score_pct": getattr(sat_res, "uniformity_score_pct", None),
+            "quadrant_stats": getattr(sat_res, "quadrant_stats", None),
             "canopy_zones": getattr(sat_res, "canopy_zones", None),
             "quality_message": sat_res.quality_message,
             "has_true_color_image": getattr(sat_res, "true_color_png", None) is not None,

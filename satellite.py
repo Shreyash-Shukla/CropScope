@@ -273,6 +273,69 @@ def compute_canopy_zones(ndvi: np.ma.MaskedArray) -> dict[str, float]:
     }
 
 
+def compute_spatial_scouting_metrics(
+    ndvi: np.ma.MaskedArray,
+) -> tuple[float | None, float | None, dict[str, dict[str, float]] | None]:
+    """Compute canopy spatial uniformity and NW/NE/SW/SE quadrant health breakdown."""
+    valid_pixels = ndvi.compressed()
+    if len(valid_pixels) == 0:
+        return None, None, None
+
+    ndvi_std = round(float(np.std(valid_pixels)), 4)
+    # Map dispersion (0.0..0.5) to an intuitive 0-100% uniformity index.
+    uniformity = round(max(0.0, min(100.0, (1.0 - min(ndvi_std, 0.5) / 0.5) * 100.0)), 1)
+
+    height, width = ndvi.shape
+    if height < 2 or width < 2:
+        return ndvi_std, uniformity, None
+
+    mid_r, mid_c = height // 2, width // 2
+    slices = {
+        "North-West": ndvi[:mid_r, :mid_c],
+        "North-East": ndvi[:mid_r, mid_c:],
+        "South-West": ndvi[mid_r:, :mid_c],
+        "South-East": ndvi[mid_r:, mid_c:],
+    }
+    quadrants: dict[str, dict[str, float]] = {}
+    for label, sub in slices.items():
+        q_valid = sub.compressed()
+        if len(q_valid) == 0:
+            continue
+        quadrants[label] = {
+            "mean_ndvi": round(float(np.mean(q_valid)), 3),
+            "low_vigor_pct": round(float(np.count_nonzero(q_valid < 0.35)) / len(q_valid) * 100.0, 1),
+            "valid_pct": round(len(q_valid) / sub.size * 100.0, 1),
+        }
+    return ndvi_std, uniformity, (quadrants or None)
+
+
+def summarize_scouting_hotspot(
+    quadrant_stats: dict[str, dict[str, float]] | None,
+    uniformity_score_pct: float | None,
+) -> str:
+    """Summarize which field quadrant to inspect first based on spatial NDVI spread."""
+    if not quadrant_stats:
+        return ""
+    weakest_label, weakest_data = min(
+        quadrant_stats.items(),
+        key=lambda item: item[1].get("mean_ndvi", 1.0),
+    )
+    strongest_data = max(
+        quadrant_stats.values(),
+        key=lambda item: item.get("mean_ndvi", -1.0),
+    )
+    spread = strongest_data.get("mean_ndvi", 0.0) - weakest_data.get("mean_ndvi", 0.0)
+    if spread >= 0.04 or weakest_data.get("low_vigor_pct", 0.0) >= 25.0:
+        return (
+            f"Priority scouting zone: {weakest_label} quadrant "
+            f"(mean NDVI {weakest_data['mean_ndvi']:.3f}; "
+            f"{weakest_data['low_vigor_pct']:.1f}% sparse/bare)."
+        )
+    if uniformity_score_pct is not None and uniformity_score_pct >= 80.0:
+        return f"High canopy uniformity ({uniformity_score_pct:.1f}%) across all field quadrants."
+    return "Canopy greenness is broadly comparable across quadrants; verify borders on site."
+
+
 def _ndvi_png(ndvi: np.ma.MaskedArray, colormap: str = "agronomic") -> bytes:
     """RGBA map: support standard agronomic, viridis, and rdylgn palettes."""
     if colormap == "viridis":
@@ -345,6 +408,10 @@ def fetch_satellite(area: AnalysisArea, *, now: datetime | None = None) -> Satel
             ) if good_quality else None
             canopy_zones = compute_canopy_zones(ndvi) if good_quality else None
             mean_savi = float(np.ma.mean(savi)) if (good_quality and savi is not None and np.ma.count(savi) > 0) else None
+            ndvi_viridis_png = _ndvi_png(ndvi, colormap="viridis") if good_quality else None
+            ndvi_std, uniformity_score_pct, quadrant_stats = (
+                compute_spatial_scouting_metrics(ndvi) if good_quality else (None, None, None)
+            )
 
             # Actual true-color RGB photograph (TCI)
             true_color_png = None
@@ -416,6 +483,10 @@ def fetch_satellite(area: AnalysisArea, *, now: datetime | None = None) -> Satel
                 sun_elevation=sun_elevation,
                 sun_azimuth=sun_azimuth,
                 mgrs_tile=mgrs_tile,
+                ndvi_viridis_png=ndvi_viridis_png,
+                ndvi_std=ndvi_std,
+                uniformity_score_pct=uniformity_score_pct,
+                quadrant_stats=quadrant_stats,
             )
             if good_quality:
                 return result

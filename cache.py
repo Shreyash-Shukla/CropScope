@@ -120,6 +120,10 @@ class CacheStore:
             "sun_elevation": result.sun_elevation,
             "sun_azimuth": result.sun_azimuth,
             "mgrs_tile": result.mgrs_tile,
+            "ndvi_viridis_png": encode(result.ndvi_viridis_png),
+            "ndvi_std": result.ndvi_std,
+            "uniformity_score_pct": result.uniformity_score_pct,
+            "quadrant_stats": result.quadrant_stats,
         })
 
     def load_satellite(self, area: AnalysisArea) -> SatelliteResult | None:
@@ -151,6 +155,10 @@ class CacheStore:
                 sun_elevation=float(payload["sun_elevation"]) if payload.get("sun_elevation") is not None else None,
                 sun_azimuth=float(payload["sun_azimuth"]) if payload.get("sun_azimuth") is not None else None,
                 mgrs_tile=payload.get("mgrs_tile"),
+                ndvi_viridis_png=decode(payload.get("ndvi_viridis_png")),
+                ndvi_std=float(payload["ndvi_std"]) if payload.get("ndvi_std") is not None else None,
+                uniformity_score_pct=float(payload["uniformity_score_pct"]) if payload.get("uniformity_score_pct") is not None else None,
+                quadrant_stats=payload.get("quadrant_stats"),
             )
         except (KeyError, TypeError, ValueError):
             return None

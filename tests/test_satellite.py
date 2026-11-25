@@ -19,8 +19,10 @@ from satellite import (
     _savi,
     _true_color_png,
     compute_canopy_zones,
+    compute_spatial_scouting_metrics,
     fetch_satellite,
     search_scenes,
+    summarize_scouting_hotspot,
 )
 
 
@@ -225,6 +227,27 @@ class SatelliteTests(unittest.TestCase):
         self.assertEqual(result.scene_id, "tci-fails")
         self.assertIsNone(result.true_color_png)
         self.assertIsNotNone(result.ndvi_png)
+        self.assertIsNotNone(result.ndvi_viridis_png)
+        self.assertIsNotNone(result.uniformity_score_pct)
+        self.assertIsNotNone(result.quadrant_stats)
+
+    def test_spatial_scouting_metrics_and_hotspot_summary(self):
+        # 4x4 grid: NW, NE, SW high NDVI (~0.70); SE low NDVI (~0.15)
+        ndvi_grid = np.ma.array([
+            [0.72, 0.70, 0.68, 0.71],
+            [0.69, 0.71, 0.70, 0.69],
+            [0.68, 0.70, 0.15, 0.12],
+            [0.71, 0.69, 0.18, 0.15],
+        ], dtype=np.float32)
+        std_val, uniformity, quadrants = compute_spatial_scouting_metrics(ndvi_grid)
+        self.assertIsNotNone(std_val)
+        self.assertIsNotNone(uniformity)
+        self.assertLess(uniformity, 70.0)
+        self.assertIsNotNone(quadrants)
+        self.assertAlmostEqual(quadrants["South-East"]["mean_ndvi"], 0.15, places=2)
+        self.assertEqual(quadrants["South-East"]["low_vigor_pct"], 100.0)
+        hotspot = summarize_scouting_hotspot(quadrants, uniformity)
+        self.assertIn("South-East", hotspot)
 
 
 if __name__ == "__main__":

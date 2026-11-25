@@ -143,6 +143,28 @@ class ReportingTests(unittest.TestCase):
         self.assertIsNotNone(data["weather"]["total_gdd_base10"])
         self.assertEqual(data["weather"]["days"][0]["wind_speed_max_kmh"], 18.5)
 
+    def test_reports_include_spatial_uniformity_and_quadrants(self):
+        base = sample_outcome(weather_ok=False, satellite_ok=True)
+        sat = SatelliteResult(
+            SAMPLE_AREA, "scene-quad", NOW, 2.0, "https://example.test/scene",
+            NOW, b"red", b"nir", b"ndvi", 0.55, 0.54, 96.0, None, 20, 20,
+            uniformity_score_pct=62.5,
+            ndvi_std=0.1875,
+            quadrant_stats={
+                "North-West": {"mean_ndvi": 0.68, "low_vigor_pct": 5.0, "valid_pct": 100.0},
+                "South-East": {"mean_ndvi": 0.30, "low_vigor_pct": 55.0, "valid_pct": 100.0},
+            },
+        )
+        outcome = AnalysisOutcome(base.request, base.weather, SourceState(sat, False, None), (), None)
+        md = generate_advisory_markdown(outcome, generated_at=NOW)
+        self.assertIn("Field Canopy Uniformity", md)
+        self.assertIn("62.5%", md)
+        self.assertIn("South-East", md)
+
+        data = json.loads(generate_advisory_json(outcome, generated_at=NOW))
+        self.assertEqual(data["satellite"]["uniformity_score_pct"], 62.5)
+        self.assertIn("South-East", data["satellite"]["quadrant_stats"])
+
 
 if __name__ == "__main__":
     unittest.main()
