@@ -336,6 +336,37 @@ class AppUITests(unittest.TestCase):
             self.assertIn("Recorded Scans", metric_labels)
             self.assertIn("Latest NDVI", metric_labels)
 
+    def test_whatsapp_brief_and_html_export_render_in_app(self):
+        from datetime import date, datetime, timedelta, timezone
+        from analysis import AnalysisOutcome, SourceState
+        from location import SAMPLE_AREA
+        from models import AnalysisRequest, ForecastDay, WeatherResult
+
+        now = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
+        days = tuple(
+            ForecastDay(date(2026, 11, 1) + timedelta(days=i), 0.0, 26.0, 3.0)
+            for i in range(7)
+        )
+        req = AnalysisRequest(SAMPLE_AREA, "Wheat", "Vegetative")
+        outcome = AnalysisOutcome(
+            req,
+            SourceState(WeatherResult(SAMPLE_AREA, days, "Asia/Kolkata", now, "https://example.test"), False, None),
+            SourceState(None, False, "No scene"),
+            (),
+            None,
+        )
+        at = AppTest.from_file(APP_PATH, default_timeout=20)
+        at.run()
+        at.radio[0].set_value("Use sample preset")
+        at.session_state["analysis_request"] = req
+        at.session_state["analysis_outcome"] = outcome
+        at.run()
+        self.assertFalse(at.exception)
+        expanders = [e.label for e in at.expander if "WhatsApp" in e.label]
+        self.assertEqual(len(expanders), 1)
+        code_blocks = [c.value for c in at.code if "CropScope Field Brief" in c.value]
+        self.assertEqual(len(code_blocks), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

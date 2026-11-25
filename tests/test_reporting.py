@@ -6,7 +6,14 @@ from analysis import AnalysisOutcome, SourceState
 from location import SAMPLE_AREA
 from models import AnalysisRequest, ForecastDay, SatelliteResult, WeatherResult
 from recommendations import Candidate, Evidence, Suggestion
-from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
+from reporting import (
+    advisory_filename_base,
+    build_whatsapp_share_url,
+    generate_advisory_html,
+    generate_advisory_json,
+    generate_advisory_markdown,
+    generate_whatsapp_brief,
+)
 
 
 NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
@@ -164,6 +171,37 @@ class ReportingTests(unittest.TestCase):
         data = json.loads(generate_advisory_json(outcome, generated_at=NOW))
         self.assertEqual(data["satellite"]["uniformity_score_pct"], 62.5)
         self.assertIn("South-East", data["satellite"]["quadrant_stats"])
+
+    def test_whatsapp_brief_and_share_url(self):
+        outcome = sample_outcome(weather_ok=True, satellite_ok=True)
+        brief_en = generate_whatsapp_brief(outcome, lang="en", generated_at=NOW)
+        self.assertIn("*CropScope Field Brief*", brief_en)
+        self.assertIn("wheat", brief_en)
+        self.assertIn("Mean NDVI 0.450", brief_en)
+        share_url = build_whatsapp_share_url(brief_en)
+        self.assertTrue(share_url.startswith("https://wa.me/?text="))
+
+        brief_hi = generate_whatsapp_brief(outcome, lang="hi", generated_at=NOW)
+        self.assertIn("CropScope खेत सारांश", brief_hi)
+
+        brief_pa = generate_whatsapp_brief(outcome, lang="pa", generated_at=NOW)
+        self.assertIn("CropScope ਖੇਤ ਰਿਪੋਰਟ", brief_pa)
+
+    def test_printable_html_report_escapes_inputs_and_embeds_images(self):
+        base = sample_outcome(weather_ok=True, satellite_ok=True)
+        xss_req = AnalysisRequest(SAMPLE_AREA, "<script>alert(1)</script>", "Vegetative")
+        sat_with_tci = SatelliteResult(
+            SAMPLE_AREA, "scene-html", NOW, 1.5, "https://example.test/scene",
+            NOW, b"red", b"nir", b"ndvi_png_bytes", 0.52, 0.50, 95.0, None, 10, 10,
+            true_color_png=b"tci_png_bytes",
+        )
+        outcome = AnalysisOutcome(xss_req, base.weather, SourceState(sat_with_tci, False, None), base.suggestions, base.suggestion_source)
+        html_doc = generate_advisory_html(outcome, generated_at=NOW)
+        self.assertIn("<!DOCTYPE html>", html_doc)
+        self.assertIn("@media print", html_doc)
+        self.assertIn("data:image/png;base64,", html_doc)
+        self.assertNotIn("<script>alert(1)</script>", html_doc)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html_doc)
 
 
 if __name__ == "__main__":

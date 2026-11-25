@@ -79,7 +79,14 @@ from location import (
     validate_rectangle,
 )
 from models import AnalysisArea, AnalysisRequest, SatelliteResult, WeatherResult
-from reporting import advisory_filename_base, generate_advisory_json, generate_advisory_markdown
+from reporting import (
+    advisory_filename_base,
+    build_whatsapp_share_url,
+    generate_advisory_html,
+    generate_advisory_json,
+    generate_advisory_markdown,
+    generate_whatsapp_brief,
+)
 from satellite import summarize_scouting_hotspot
 from auth import (
     SESSION_ACTIVE_CHAT_KEY,
@@ -1639,9 +1646,9 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
         unsafe_allow_html=True,
     )
     st.caption(t("export_caption", lang))
-    dl_left, dl_mid, dl_right = st.columns(3)
+    dl_c1, dl_c2, dl_c3, dl_c4 = st.columns(4)
     filename_base = advisory_filename_base(outcome)
-    with dl_left:
+    with dl_c1:
         st.download_button(
             label=t("dl_markdown", lang),
             data=generate_advisory_markdown(outcome),
@@ -1649,7 +1656,7 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
             mime="text/markdown",
             use_container_width=True,
         )
-    with dl_mid:
+    with dl_c2:
         st.download_button(
             label=t("dl_json", lang),
             data=generate_advisory_json(outcome),
@@ -1657,12 +1664,31 @@ def show_export_section(outcome: AnalysisOutcome) -> None:
             mime="application/json",
             use_container_width=True,
         )
-    with dl_right:
+    with dl_c3:
         st.download_button(
             label=t("dl_geojson", lang),
             data=generate_area_geojson_str(outcome.request.area, f"{outcome.request.crop} Field Boundary"),
             file_name=f"{filename_base}_boundary.geojson",
             mime="application/geo+json",
+            use_container_width=True,
+        )
+    with dl_c4:
+        st.download_button(
+            label="Printable Report (HTML)",
+            data=generate_advisory_html(outcome),
+            file_name=f"{filename_base}.html",
+            mime="text/html",
+            use_container_width=True,
+            help="Self-contained offline report with embedded satellite images — open in any browser to print or save as PDF.",
+        )
+
+    brief_text = generate_whatsapp_brief(outcome, lang=lang)
+    with st.expander("📲 Share Field Brief via WhatsApp / SMS (Localized Copyable Summary)", expanded=False):
+        st.code(brief_text, language="text")
+        render_copy_tooltip_suppression_script()
+        st.link_button(
+            "📲 Share Directly via WhatsApp",
+            url=build_whatsapp_share_url(brief_text),
             use_container_width=True,
         )
 
