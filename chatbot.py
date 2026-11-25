@@ -38,7 +38,10 @@ GEMINI_MODEL = "gemini-3.1-flash-lite"
 GEMINI_TIMEOUT_MS = 25_000
 
 
-def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
+def get_dossier_summary_stats(
+    outcome: AnalysisOutcome,
+    historical_trend: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Extract key numerical and qualitative metrics from an analysis outcome."""
     req = outcome.request
     area = req.area
@@ -88,7 +91,16 @@ def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
         "canopy_summary": "",
         "canopy_zones": {},
         "suggestions_count": len(outcome.suggestions),
+        "historical_scan_count": 0,
+        "historical_ndvi_delta": None,
+        "historical_ndvi_direction": None,
+        "historical_prev_date": None,
     }
+    if historical_trend:
+        stats["historical_scan_count"] = historical_trend.get("scan_count", 0)
+        stats["historical_ndvi_delta"] = historical_trend.get("ndvi_delta")
+        stats["historical_ndvi_direction"] = historical_trend.get("ndvi_direction")
+        stats["historical_prev_date"] = historical_trend.get("prev_scanned_at")
 
     # Weather extraction
     weather_res = outcome.weather.result
@@ -150,13 +162,17 @@ def get_dossier_summary_stats(outcome: AnalysisOutcome) -> Dict[str, Any]:
     return stats
 
 
-def build_farmer_dossier(outcome: AnalysisOutcome, lang: str = "en") -> str:
+def build_farmer_dossier(
+    outcome: AnalysisOutcome,
+    lang: str = "en",
+    historical_trend: Optional[Dict[str, Any]] = None,
+) -> str:
     """Build a comprehensive, grounded field intelligence dossier for LLM context.
 
     This acts as the hyper-local ground-truth document for RAG generation, preventing
     hallucination and grounding all advice in this exact field's satellite pass and weather.
     """
-    stats = get_dossier_summary_stats(outcome)
+    stats = get_dossier_summary_stats(outcome, historical_trend=historical_trend)
     req = outcome.request
     area = req.area
     lat_center, lon_center = area.center
@@ -298,6 +314,10 @@ def build_farmer_dossier(outcome: AnalysisOutcome, lang: str = "en") -> str:
                 lines.append(
                     f"- {q_name}: Mean NDVI {q_vals['mean_ndvi']:.3f} ({q_vals['low_vigor_pct']:.1f}% sparse/bare)"
                 )
+        if stats.get("historical_ndvi_delta") is not None:
+            lines.append(
+                f"- Multi-Scan NDVI Progression: {stats['historical_ndvi_delta']:+.3f} ({stats['historical_ndvi_direction']}) compared to prior recorded scan on {stats['historical_prev_date']} ({stats['historical_scan_count']} scans recorded)"
+            )
     else:
         err_msg = outcome.satellite.error or "Satellite imagery pass is currently unavailable."
         lines.append(f"- Status: Satellite data unavailable ({err_msg})")

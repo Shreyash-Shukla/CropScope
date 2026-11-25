@@ -13,6 +13,9 @@ from auth import (
     SESSION_ACTIVE_CHAT_KEY,
     SESSION_ACTIVE_FIELD_KEY,
     SESSION_FARMER_KEY,
+    build_parcel_comparison_rows,
+    compute_scan_trend_metrics,
+    export_scans_csv,
     get_active_field,
     get_current_farmer,
     is_authenticated,
@@ -229,6 +232,85 @@ class TestAuthSession(unittest.TestCase):
                     os.remove(tmp.name)
             except Exception:
                 pass
+
+    def test_scan_trend_metrics_parcel_comparison_and_csv_export(self):
+        fields = [
+            {
+                "id": "f-north",
+                "name": "=MaliciousPlot",
+                "area_ha": 12.5,
+                "area_acres": 30.89,
+                "irrigation_source": "Canal",
+                "bbox_south": 29.70,
+                "bbox_west": 77.00,
+                "bbox_north": 29.71,
+                "bbox_east": 77.01,
+            },
+            {
+                "id": "f-south",
+                "name": "South Plot",
+                "area_ha": 8.0,
+                "area_acres": 19.77,
+                "irrigation_source": "Tube Well",
+                "bbox_south": 29.60,
+                "bbox_west": 77.00,
+                "bbox_north": 29.61,
+                "bbox_east": 77.01,
+            },
+        ]
+        scans = [
+            {
+                "field_id": "f-north",
+                "crop_name": "Wheat",
+                "growth_stage": "Seedling",
+                "bbox_south": 29.70,
+                "bbox_west": 77.00,
+                "bbox_north": 29.71,
+                "bbox_east": 77.01,
+                "rain_7d_mm": 0.0,
+                "et0_7d_mm": 14.0,
+                "net_water_mm": -14.0,
+                "water_status": "Deficit",
+                "safe_to_spray_48h": True,
+                "mean_ndvi": 0.30,
+                "mean_savi": 0.25,
+                "scanned_at": "2026-11-01T10:00:00+00:00",
+            },
+            {
+                "field_id": "f-north",
+                "crop_name": "Wheat",
+                "growth_stage": "Vegetative",
+                "bbox_south": 29.70,
+                "bbox_west": 77.00,
+                "bbox_north": 29.71,
+                "bbox_east": 77.01,
+                "rain_7d_mm": 10.0,
+                "et0_7d_mm": 18.0,
+                "net_water_mm": -8.0,
+                "water_status": "Deficit",
+                "safe_to_spray_48h": False,
+                "mean_ndvi": 0.52,
+                "mean_savi": 0.45,
+                "scanned_at": "2026-11-12T10:00:00+00:00",
+            },
+        ]
+        trend = compute_scan_trend_metrics(scans, field_id="f-north")
+        self.assertEqual(trend["scan_count"], 2)
+        self.assertAlmostEqual(trend["ndvi_delta"], 0.22, places=3)
+        self.assertEqual(trend["ndvi_direction"], "Improving")
+        self.assertAlmostEqual(trend["savi_delta"], 0.20, places=3)
+        self.assertAlmostEqual(trend["net_water_delta"], 6.0, places=2)
+
+        comp = build_parcel_comparison_rows(fields, scans)
+        self.assertEqual(len(comp), 2)
+        self.assertEqual(comp[0]["Mean NDVI"], 0.52)
+        self.assertEqual(comp[0]["48h Spray"], "Hold")
+        self.assertEqual(comp[1]["Latest Crop"], "Not scanned")
+
+        csv_out = export_scans_csv(scans, fields_by_id={f["id"]: f for f in fields})
+        self.assertIn("scanned_at_utc,field_name,crop_name", csv_out)
+        self.assertIn("'=MaliciousPlot", csv_out)
+        self.assertIn("Wheat,Vegetative", csv_out)
 
 
 if __name__ == "__main__":

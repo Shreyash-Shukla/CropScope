@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
@@ -254,6 +255,86 @@ class AppUITests(unittest.TestCase):
         self.assertIsNotNone(toggle)
         toggle.set_value(True).run()
         self.assertFalse(at.exception)
+
+    def test_logged_in_farmer_farm_analytics_panel_renders(self):
+        from auth.session import SESSION_FARMER_KEY
+        farmer = {"id": "farmer-ui-analytics-test", "full_name": "Kisan Test", "preferred_language": "en"}
+        sample_scans = [
+            {
+                "id": "s1",
+                "field_id": "f1",
+                "crop_name": "Wheat",
+                "growth_stage": "Seedling",
+                "bbox_south": 29.748,
+                "bbox_west": 77.048,
+                "bbox_north": 29.752,
+                "bbox_east": 77.052,
+                "rain_7d_mm": 2.0,
+                "et0_7d_mm": 18.0,
+                "net_water_mm": -16.0,
+                "water_status": "Deficit",
+                "safe_to_spray_48h": True,
+                "mean_ndvi": 0.34,
+                "mean_savi": 0.30,
+                "scanned_at": "2026-11-01T10:00:00+00:00",
+            },
+            {
+                "id": "s2",
+                "field_id": "f1",
+                "crop_name": "Wheat",
+                "growth_stage": "Vegetative",
+                "bbox_south": 29.748,
+                "bbox_west": 77.048,
+                "bbox_north": 29.752,
+                "bbox_east": 77.052,
+                "rain_7d_mm": 8.0,
+                "et0_7d_mm": 20.0,
+                "net_water_mm": -12.0,
+                "water_status": "Deficit",
+                "safe_to_spray_48h": True,
+                "mean_ndvi": 0.48,
+                "mean_savi": 0.42,
+                "scanned_at": "2026-11-10T10:00:00+00:00",
+            },
+        ]
+        sample_fields = [
+            {
+                "id": "f1",
+                "name": "North Plot",
+                "area_ha": 17.2,
+                "area_acres": 42.4,
+                "irrigation_source": "Canal",
+                "bbox_south": 29.748,
+                "bbox_west": 77.048,
+                "bbox_north": 29.752,
+                "bbox_east": 77.052,
+            },
+            {
+                "id": "f2",
+                "name": "South Plot",
+                "area_ha": 10.0,
+                "area_acres": 24.7,
+                "irrigation_source": "Tube Well",
+                "bbox_south": 29.70,
+                "bbox_west": 77.00,
+                "bbox_north": 29.71,
+                "bbox_east": 77.01,
+            },
+        ]
+        with (
+            unittest.mock.patch("auth.fields_ui.list_fields", return_value=sample_fields),
+            unittest.mock.patch("auth.history.list_fields", return_value=sample_fields),
+            unittest.mock.patch("auth.history.list_scans_for_farmer", return_value=sample_scans),
+        ):
+            at = AppTest.from_file(APP_PATH, default_timeout=20)
+            at.session_state[SESSION_FARMER_KEY] = farmer
+            at.run()
+            self.assertFalse(at.exception)
+            expanders = [e.label for e in at.expander if "Farm Scan Trends" in e.label]
+            self.assertEqual(len(expanders), 1)
+            metric_labels = {m.label for m in at.metric}
+            self.assertIn("Recorded Scans", metric_labels)
+            self.assertIn("Latest NDVI", metric_labels)
 
 
 if __name__ == "__main__":

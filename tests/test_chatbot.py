@@ -242,6 +242,20 @@ class ChatbotEngineTests(unittest.TestCase):
         self.assertIn("4-Quadrant Spatial Vigor", dossier)
         self.assertIn("South-East: Mean NDVI 0.280", dossier)
 
+    def test_dossier_includes_historical_ndvi_trend(self):
+        trend = {
+            "scan_count": 3,
+            "ndvi_delta": 0.085,
+            "ndvi_direction": "Improving",
+            "prev_scanned_at": "2026-10-25",
+        }
+        stats = get_dossier_summary_stats(self.outcome, historical_trend=trend)
+        self.assertEqual(stats["historical_scan_count"], 3)
+        self.assertAlmostEqual(stats["historical_ndvi_delta"], 0.085)
+        dossier = build_farmer_dossier(self.outcome, historical_trend=trend)
+        self.assertIn("Multi-Scan NDVI Progression: +0.085 (Improving)", dossier)
+        self.assertIn("2026-10-25", dossier)
+
     def test_fallback_irrigation_includes_crop_etc(self):
         dry_outcome = make_test_outcome(weather_ok=True, rain_override=0.0, temp_override=30.0)
         dry_stats = get_dossier_summary_stats(dry_outcome)

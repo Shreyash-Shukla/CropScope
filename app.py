@@ -83,17 +83,20 @@ from reporting import advisory_filename_base, generate_advisory_json, generate_a
 from satellite import summarize_scouting_hotspot
 from auth import (
     SESSION_ACTIVE_CHAT_KEY,
+    compute_scan_trend_metrics,
     get_active_field,
     get_current_farmer,
     is_authenticated,
     record_scan_outcome,
     render_auth_drawer,
     render_auth_header_widget,
+    render_farm_analytics_panel,
     render_farmer_fields_selector,
     render_save_field_widget,
     set_active_field,
 )
 from db.chat import create_chat_session, get_chat_history, list_chat_sessions, save_chat_message
+from db.scans import list_scans_for_farmer
 
 
 def add_map_layers(map_obj: folium.Map) -> None:
@@ -1787,9 +1790,21 @@ def show_kisan_mitra_chat(outcome: AnalysisOutcome) -> None:
                     st.rerun()
 
     # Pre-build ground-truth dossier and stats with safety fallback
+    historical_trend = None
+    if farmer:
+        try:
+            farmer_scans = list_scans_for_farmer(farmer["id"], limit=20)
+            req_area = outcome.request.area
+            historical_trend = compute_scan_trend_metrics(
+                farmer_scans,
+                field_id=field_id,
+                bbox=(req_area.south, req_area.west, req_area.north, req_area.east),
+            )
+        except Exception:
+            historical_trend = None
     try:
-        dossier = build_farmer_dossier(outcome, lang=lang)
-        stats = get_dossier_summary_stats(outcome)
+        dossier = build_farmer_dossier(outcome, lang=lang, historical_trend=historical_trend)
+        stats = get_dossier_summary_stats(outcome, historical_trend=historical_trend)
     except Exception:
         dossier = f"Field Dossier for {outcome.request.crop} ({outcome.request.growth_stage})"
         stats = {"mean_ndvi": None, "water_balance_status": "Available"}
@@ -3197,5 +3212,14 @@ elif st.session_state.get("analysis_outcome"):
     show_suggestions(outcome)
     show_export_section(outcome)
     show_kisan_mitra_chat(outcome)
+
+if current_farmer:
+    act_f = get_active_field()
+    render_farm_analytics_panel(
+        current_farmer["id"],
+        area=area,
+        field_id=act_f["id"] if act_f else None,
+        current_lang=current_lang,
+    )
 
 render_footer(current_lang)
