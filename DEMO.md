@@ -2,14 +2,14 @@
 
 Prepare with `streamlit run app.py`. Keep the Karnal example available as a backup. The saved example was fetched on 30 October 2026 and must be described as dated historical data if used later.
 
-**0:00–0:25 — Select an area.** Show the world map and draw one tight rectangle over agricultural land. Point out the outlined analysis area and its approximate size. If the map interaction is slow, enter the four edge coordinates instead. The Karnal example is the backup shortcut.
+**0:00–0:25 — Select an area.** Show the world map under **Draw on map** (labelled satellite hybrid view with village/road overlays) and draw one tight rectangle over agricultural land. Point out the outlined analysis area in hectares and acres. If map interaction is slow, use **Search location**, **Use my location**, **Enter coordinates**, or **Use sample preset** (Karnal backup shortcut).
 
-**0:25–0:55 — Weather.** Enter the crop and growth stage and press **Analyze / retry live**. Show the seven dated daily rows for rain, maximum temperature, and reference ET₀. Explain that Open-Meteo estimates weather for the rectangle's centre and that ET₀ is not a measured soil water deficit.
+**0:25–0:55 — Weather & Crop Water Plan.** Enter the crop and growth stage and press **ANALYZE SATELLITE PASSES →**. Show the seven dated daily rows for rain, rain probability, max/min temperature, wind speed, humidity, GDD, and reference ET₀, along with the **Crop-Specific Water Planner (FAO-56 ETc)** and **Field Operations Planner**. Explain that Open-Meteo estimates weather for the rectangle's centre and that ET₀ / ETc are atmospheric estimates, not measured soil water readings.
 
-**0:55–1:25 — Satellite.** Show the Sentinel-2 scene ID and acquisition date, the usable-pixel percentage, and the cloud-masked NDVI image with mean and median. Explain that the rectangle can include non-crop land and NDVI indicates greenness rather than disease or yield.
+**0:55–1:25 — Satellite & Spatial Scouting.** Show the Sentinel-2 scene ID, acquisition date, True Color (TCI) photo alongside cloud-masked NDVI (plus the colorblind-safe Viridis toggle), canopy uniformity, the **4-Quadrant Scouting Compass (NW/NE/SW/SE)**, and the **Georeferenced NDVI Field Overlay** map. Explain that the rectangle can include non-crop land and NDVI indicates greenness rather than disease or yield.
 
-**1:25–1:50 — Checks.** Show the evidence under each suggestion. State whether the banner says **Gemini-ranked** or **Rule-based fallback**. A live Gemini ranking completed on 31 October 2026; the dated 30 October screenshot in the presentation shows the fallback before the key was configured.
+**1:25–1:50 — Checks, Exports & Kisan Mitra.** Show the evidence under each suggestion (**Gemini-ranked** or **Rule-based fallback**), the **WhatsApp / SMS Field Brief**, **Printable HTML Report**, and the **Kisan Mitra** multilingual advisor.
 
-**1:50–2:00 — Reliability.** Explain that weather and satellite can fail independently. **Use saved result for this rectangle** shows original dates and a saved label. It never uses Karnal data for another rectangle.
+**1:50–2:00 — Reliability.** Explain that weather and satellite can fail independently. **USE SAVED ARCHIVE SCENE** shows original dates and a saved label. It never uses Karnal data for another rectangle.
 
-For a network outage, choose **Use Karnal example**, enter a crop and stage, then press **Use saved result for this rectangle**. Say the forecast dates and scene acquisition date aloud. Retry live later when the services return.
+For a network outage, choose **Use sample preset**, enter a crop and stage, then press **USE SAVED ARCHIVE SCENE**. Say the forecast dates and scene acquisition date aloud. Retry live later when the services return.
